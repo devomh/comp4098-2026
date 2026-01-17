@@ -1,0 +1,21 @@
+graph LR;
+    Capture[1. Capture] --> Store[2. Store];
+    Store --> Process[3. Process];
+    Process --> Analyze[4. Analyze];
+    Analyze --> Archive[5. Archive];
+    
+    subgraph "Transactional (OLTP)"
+    Capture
+    Store
+    end
+    
+    subgraph "Analytical (OLAP)"
+    Process
+    Analyze
+    end
+    
+    classDef oltp fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef olap fill:#ccf,stroke:#333,stroke-width:2px;
+    
+    class Capture,Store oltp;
+    class Process,Analyze olap;

@@ -1,0 +1,10 @@
+date,city,temperature_c,humidity,status
+2024-01-01,New York,2.5,55,active
+2024-01-01,London,5.1,80,active
+2024-01-01,Tokyo,8.4,45,active
+2024-01-02,New York,1.2,50,active
+2024-01-02,London,NULL,82,error
+2024-01-02,Tokyo,7.9,40,active
+2024-01-03,New York,-1.5,48,active
+2024-01-03,London,4.8,78,active
+2024-01-03,Tokyo,9.1,42,active

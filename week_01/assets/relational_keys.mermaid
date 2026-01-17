@@ -1,0 +1,19 @@
+erDiagram
+    STUDENT {
+        int student_id PK "Primary Key (Unique)"
+        string name
+        string email "Candidate Key (Unique)"
+    }
+    ENROLLMENT {
+        int enrollment_id PK
+        int student_id FK "Foreign Key (Links to STUDENT)"
+        int course_id FK
+        date enrolled_at
+    }
+    COURSE {
+        int course_id PK
+        string title
+    }
+
+    STUDENT ||--o{ ENROLLMENT : "makes"
+    COURSE ||--o{ ENROLLMENT : "has"

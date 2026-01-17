@@ -1,0 +1,11 @@
+[
+  {"date": "2024-01-01", "city": "New York", "temperature_c": 2.5, "humidity": 55, "status": "active"},
+  {"date": "2024-01-01", "city": "London", "temperature_c": 5.1, "humidity": 80, "status": "active"},
+  {"date": "2024-01-01", "city": "Tokyo", "temperature_c": 8.4, "humidity": 45, "status": "active"},
+  {"date": "2024-01-02", "city": "New York", "temperature_c": 1.2, "humidity": 50, "status": "active"},
+  {"date": "2024-01-02", "city": "London", "temperature_c": null, "humidity": 82, "status": "error"},
+  {"date": "2024-01-02", "city": "Tokyo", "temperature_c": 7.9, "humidity": 40, "status": "active"},
+  {"date": "2024-01-03", "city": "New York", "temperature_c": -1.5, "humidity": 48, "status": "active"},
+  {"date": "2024-01-03", "city": "London", "temperature_c": 4.8, "humidity": 78, "status": "active"},
+  {"date": "2024-01-03", "city": "Tokyo", "temperature_c": 9.1, "humidity": 42, "status": "active"}
+]
