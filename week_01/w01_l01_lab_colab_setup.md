@@ -19,7 +19,9 @@ Run this block to install the necessary libraries. This is the standard block we
 ```python
 # Install DuckDB and JupySQL for SQL magic in Notebooks
 !pip install duckdb duckdb-engine jupysql pandas
+```
 
+```python
 import duckdb
 import pandas as pd
 
@@ -31,6 +33,7 @@ import pandas as pd
 
 # Connect to an in-memory DuckDB database
 %sql duckdb:///:memory:
+# %sql duckdb:///weather.db
 ```
 
 ---
@@ -43,23 +46,21 @@ We will simulate "Capturing" data by reading a raw CSV file. This represents raw
 ```python
 # Simulating 'Capture' - Reading raw text data
 # (In a real scenario, this might be an API call or a log file)
-url = "https://raw.githubusercontent.com/username/repo/main/week_01/data/weather_raw.csv" 
-# NOTE: For local dev, use the relative path:
-file_path = "week_01/data/weather_raw.csv"
+# Upload weather_raw.csv to Colaboratory
 
 # We use DuckDB to read the CSV directly into a relation
 # This is fast and efficient
-%sql SELECT * FROM read_csv_auto('week_01/data/weather_raw.csv');
+%sql SELECT * FROM read_csv_auto('weather_raw.csv');
 ```
 
-**Observation:** Notice the `NULL` values and the potential errors in the data? That is normal for the "Capture" stage.
+**Observation:** Notice the `NULL` value (NaN in Pandas) and the potential errors in the data? That is normal for the "Capture" stage.
 
 ---
 
 ## 3. Stage 2: Store (Persist)
 Now we "Store" this data into a structured table. In a full architecture, this would be PostgreSQL, but we will use a DuckDB table to simulate the structure.
 
-```sql
+```python
 %%sql
 -- Create a table with defined types (Schema)
 CREATE TABLE weather_staging (
@@ -72,11 +73,13 @@ CREATE TABLE weather_staging (
 
 -- Load the raw data into our table
 INSERT INTO weather_staging 
-SELECT * FROM read_csv_auto('week_01/data/weather_raw.csv');
+SELECT * FROM read_csv_auto('weather_raw.csv');
 
 -- Verify storage
 SELECT count(*) as total_rows FROM weather_staging;
 ```
+
+**Note:** If this operation fails (e.g., data type mismatch, constraint violation), DuckDB will leave the transaction in an aborted state. You'll need to run `%sql ROLLBACK;` before trying again. If the table was created but the INSERT failed, you may also need to drop the table first: `%sql DROP TABLE IF EXISTS weather_staging;`
 
 ---
 
@@ -96,7 +99,7 @@ print(f"Average Temp (Python): {df_clean['temp_c'].mean():.2f}")
 ### The "Better" Approach (SQL Pushdown)
 *We let the database engine do the work. This is faster and scales.*
 
-```sql
+```python
 %%sql
 -- Filter (Process) and Aggregate (Analyze) in one go
 SELECT 
@@ -114,7 +117,7 @@ ORDER BY avg_temp DESC;
 ## 5. Stage 5: Archive
 Finally, we save our valuable insights to a format optimized for long-term storage and other data science tools: **Parquet**.
 
-```sql
+```python
 %%sql
 -- Export the cleaned data to a Parquet file
 COPY (
@@ -134,21 +137,21 @@ You should see a `cleaned_weather.parquet` file appear in your file browser. Thi
 **Hint:** Look up `read_json_auto` in the DuckDB documentation.
 
 ```python
-# TODO: Write a query to read the 'week_01/data/weather_raw.json' file
+# TODO: Write a query to read the 'weather_raw.json' file. Remember to first upload it to Colaboratory
 # %sql SELECT * FROM ...
 ```
 
 ### Exercise 2: Add a Filter
 **Task:** Modify the Analytical Query in Stage 4 to only show cities with an average temperature > 5.0.
 
-```sql
+```python
 -- TODO: Write your SQL here
 ```
 
 ---
 
 ## 7. Summary
-You just simulated the entire Data Engineering lifecycle in 10 minutes!
+You just simulated the entire Data Engineering lifecycle in a few minutes!
 1.  **Captured** raw CSV.
 2.  **Stored** it in a Table.
 3.  **Processed** it by filtering 'active' status.

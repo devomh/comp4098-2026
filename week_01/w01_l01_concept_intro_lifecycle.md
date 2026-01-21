@@ -33,18 +33,22 @@ This course moves you from "How do I write a query?" to "Which database should I
 Data is not static; it flows. We define this flow in five key stages.
 
 ### Visual Architecture
+
+**Figure 1: The Data Lifecycle Flow**
+The lifecycle consists of five sequential stages flowing left to right: (1) Capture, (2) Store, (3) Process, (4) Analyze, and (5) Archive. The first two stages (Capture and Store) are grouped under "Transactional (OLTP)" systems, while Process and Analyze are grouped under "Analytical (OLAP)" systems. Archive stands alone as the final stage for long-term storage.
+
 ```mermaid
 graph LR;
     Capture[1. Capture] --> Store[2. Store];
     Store --> Process[3. Process];
     Process --> Analyze[4. Analyze];
     Analyze --> Archive[5. Archive];
-    
+
     subgraph "Transactional (OLTP)"
     Capture
     Store
     end
-    
+
     subgraph "Analytical (OLAP)"
     Process
     Analyze
