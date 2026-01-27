@@ -43,7 +43,7 @@ In Data Science and Engineering, jumping straight to `CREATE TABLE` often leads 
 > *   `Hotel` is a **Strong Entity** (It has a unique Name/ID).
 > *   `Room` is a **Weak Entity**. "Room 101" is not unique in the world. It is only unique *within* a specific Hotel. If you tear down the Hotel, the Room ceases to exist conceptually.
 
-### Visual Architecture (Mermaid.js)
+### Visual Architecture
 ```mermaid
 erDiagram
     %% Strong Entity
@@ -173,11 +173,11 @@ For complex domains, **Extended ER** adds:
 ---
 
 ## 8. Further Reading
-*Curated resources for deeper self-study.*
+*Additional resources for deeper self-study.*
 
 ### Textbook
 *   **Database Design - 2nd Edition** by Adrienne Watt
-    *   [Chapter 8: The Entity Relationship Data Model](https://opentextbc.ca/dbdesign01/chapter/chapter-8-the-entity-relationship-data-model/)
+    *   [Chapter 8: The Entity Relationship Data Model](https://opentextbc.ca/dbdesign01/chapter/chapter-8-entity-relationship-model/)
 
 ### Documentation
 *   [Mermaid.js ER Diagram Syntax](https://mermaid.js.org/syntax/entityRelationshipDiagram.html) — Official reference for creating ER diagrams in Mermaid.
