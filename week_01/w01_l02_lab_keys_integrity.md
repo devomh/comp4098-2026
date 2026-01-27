@@ -39,7 +39,7 @@ We will create a `users` table.
 *   `email`: Candidate Key (Natural Key, must be Unique)
 *   `age`: Domain Constraint (Must be positive)
 
-```sql
+```python
 %%sql
 CREATE TABLE users (
     user_id INTEGER PRIMARY KEY,
@@ -85,7 +85,7 @@ except Exception as e:
 ## 3. Step 2: Referential Integrity (Foreign Keys)
 Now we create an `orders` table that links to `users`.
 
-```sql
+```python
 %%sql
 CREATE TABLE orders (
     order_id INTEGER PRIMARY KEY,
@@ -109,7 +109,7 @@ except Exception as e:
 
 ### The "Valid" Insert
 Insert a valid user first, then the order.
-```sql
+```python
 %%sql
 INSERT INTO users VALUES (1, 'Alice', 'alice@test.com', 25);
 INSERT INTO orders VALUES (101, 1, 50.00); -- Valid, User 1 exists
@@ -140,7 +140,7 @@ except Exception as e:
 *   `enrollments`: needs to link a `student_id` (integer) and `course_code`.
 *   **Constraint:** A student cannot enroll in the same course twice. (Hint: Composite Primary Key).
 
-```sql
+```python
 -- TODO: Write your CREATE TABLE statements here
 ```
 
@@ -218,7 +218,7 @@ except Exception as e:
 2. Identify the Foreign Keys and which tables they connect.
 3. Write the `CREATE TABLE` statements with appropriate constraints.
 
-```sql
+```python
 -- TODO: Write your CREATE TABLE statements here
 -- Table: books
 

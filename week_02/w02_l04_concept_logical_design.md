@@ -50,14 +50,29 @@ Before we map, let's agree on how to name things.
 ### Visual Example
 **ER Model:** `Department (1) ---- (N) Professor`
 
+```mermaid
+erDiagram
+    DEPARTMENT {
+        int dept_id PK
+        string name
+        string building
+    }
+    PROFESSOR {
+        int emp_id PK
+        string name
+        int dept_id FK
+    }
+    DEPARTMENT ||--|{ PROFESSOR : employs
+```
+
 **Relational Schema:**
 
 | Table | Columns |
 | :--- | :--- |
-| **Department** | `dept_id` (PK), `name`, `building` |
-| **Professor** | `emp_id` (PK), `name`, `dept_id` (FK) |
+| **departments** | `dept_id` (PK), `name`, `building` |
+| **professors** | `emp_id` (PK), `name`, `dept_id` (FK) |
 
-*Note:* The `dept_id` moved into the `Professor` table because a Professor "belongs to" a Department. If we put `emp_id` in Department, a Department could only have one Professor!
+*Note:* The `dept_id` moved into the `professors` table because a Professor "belongs to" a Department. If we put `emp_id` in `departments`, a Department could only have one Professor!
 
 ### Key Takeaway
 *   **"Foreign Keys go to the Many side."** Memorize this.
@@ -73,16 +88,35 @@ We create a **new table** to represent the relationship. This table contains the
 
 **ER Model:** `Student (M) ---- (N) Course`
 
+```mermaid
+erDiagram
+    STUDENT {
+        int student_id PK
+        string name
+    }
+    COURSE {
+        string course_code PK
+        string title
+    }
+    ENROLLMENT {
+        int student_id PK_FK
+        string course_code PK_FK
+        date enrollment_date
+    }
+    STUDENT ||--o{ ENROLLMENT : has
+    COURSE ||--o{ ENROLLMENT : has
+```
+
 **Relational Schema:**
 
 | Table | Columns |
 | :--- | :--- |
-| **Student** | `student_id` (PK), `name` |
-| **Course** | `course_code` (PK), `title` |
-| **Enrollment** | `student_id` (FK, PK), `course_code` (FK, PK), `enrollment_date` |
+| **students** | `student_id` (PK), `name` |
+| **courses** | `course_code` (PK), `title` |
+| **enrollments** | `student_id` (FK, PK), `course_code` (FK, PK), `enrollment_date` |
 
-*   The `Enrollment` table is the bridge.
-*   The Primary Key of `Enrollment` is usually a **Composite Key** (`student_id` + `course_code`).
+*   The `enrollments` table is the bridge.
+*   The Primary Key of `enrollments` is usually a **Composite Key** (`student_id` + `course_code`).
 
 ---
 
@@ -100,16 +134,67 @@ A **Weak Entity** (like `Room` inside `Hotel`) cannot exist without its owner.
 
 ---
 
-## 7. FAQ / Industry Reality
+## 7. Core Concept D: Self-Referencing Relationships
+Sometimes an entity relates to *itself*. This is common in hierarchical or recursive structures.
+
+### The Pattern
+A **Self-Referencing Relationship** uses a Foreign Key that points back to the same table's Primary Key.
+
+**Example:** A Course can have a *Prerequisite* (which is also a Course).
+
+```mermaid
+erDiagram
+    COURSE {
+        string course_code PK
+        string title
+        int credits
+        string prereq_code FK
+    }
+    COURSE ||--o| COURSE : requires
+```
+
+**Relational Schema:**
+
+| Table | Columns |
+| :--- | :--- |
+| **courses** | `course_code` (PK), `title`, `credits`, `prereq_code` (FK -> `courses.course_code`) |
+
+*   "Advanced SQL" (`prereq_code` = 'SQL101') requires "Intro SQL" (`course_code` = 'SQL101').
+*   Courses with no prerequisites have `prereq_code` = `NULL`.
+
+### Key Takeaway
+*   Self-referencing FKs enable hierarchical data (org charts, categories, prerequisites).
+*   The FK column is usually **nullable** (root nodes have no parent).
+
+---
+
+## 8. Normalization Context
+*How does proper mapping relate to normalization?*
+
+When you follow the mapping rules correctly, you are already doing much of the work that **Normalization** (covered in Week 3) formalizes:
+
+| Mapping Rule | Normalization Benefit |
+| :--- | :--- |
+| Each Entity → Separate Table | Eliminates redundancy (2NF) |
+| M:N → Junction Table | Ensures atomic values (1NF) |
+| FK in "Many" side | Removes transitive dependencies (3NF) |
+
+> **Preview:** In Week 3, we will formalize these intuitions with **Functional Dependencies** and the **1NF → 2NF → 3NF** progression. Proper ER-to-Relational mapping gives you a head start.
+
+---
+
+## 9. FAQ / Industry Reality
 
 ### "Can't I just use an Array column in Postgres?"
 **Answer:** Postgres *does* support Array types. For simple lists (like tags), this is fine. But for relationships where you need to *join* or *query* the related data efficiently (e.g., "Find all students in Math 101"), standard Junction Tables are significantly faster and enforce integrity constraints that arrays cannot easily do.
 
 ---
 
-## 8. Summary & Next Steps
+## 10. Summary & Next Steps
 *   **Strong Entity** = New Table.
 *   **1:N** = FK in the Child ("Many") table.
 *   **M:N** = New "Junction" Table with two FKs.
 *   **Weak Entity** = Composite PK including the Owner's ID.
+*   **Self-Referencing** = FK pointing to the same table's PK.
+*   **Normalization** = Proper mapping sets you up for 1NF-3NF compliance (Week 3).
 *   **Next:** Go to the Practical Lab `w02_l04_lab_schema_conversion.md` to write these schemas out.

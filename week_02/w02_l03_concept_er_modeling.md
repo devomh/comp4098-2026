@@ -41,7 +41,7 @@ In Data Science and Engineering, jumping straight to `CREATE TABLE` often leads 
 
 > **Example:** Consider a **Hotel** and its **Rooms**.
 > *   `Hotel` is a **Strong Entity** (It has a unique Name/ID).
-> *   `Room` is a **Weak Entity**. "Room 101" is not unique in the world. It is only unique *within* a specific Hotel. If you tear down the Hotel, the Room ceases to exist conceptuallly.
+> *   `Room` is a **Weak Entity**. "Room 101" is not unique in the world. It is only unique *within* a specific Hotel. If you tear down the Hotel, the Room ceases to exist conceptually.
 
 ### Visual Architecture (Mermaid.js)
 ```mermaid

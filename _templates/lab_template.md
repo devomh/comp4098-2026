@@ -14,10 +14,14 @@ duration: "60 mins"
 *   **Data:** Ensure `data/dataset.csv` is present.
 
 ### Environment Setup
-Run this block to initialize your environment.
+Run this block first to install packages and initialize your environment.
 ```python
+# Setup: Run this cell first (required for Colab)
+!pip install -q pandas duckdb sqlalchemy mermaid-py
+
 import pandas as pd
 import duckdb
+# from mermaid import Mermaid  # Uncomment if using Mermaid diagrams
 
 # Display settings
 pd.set_option('display.max_columns', None)
@@ -40,10 +44,13 @@ pd.set_option('display.max_columns', None)
 # Optimized code
 ```
 
-**Expected Output:**
+<details>
+<summary>Expected Output</summary>
+
 ```text
 (Show what the result should look like)
 ```
+</details>
 
 ---
 
@@ -67,12 +74,28 @@ Now it's your turn to apply what you've learned.
 # TODO: Write your code here
 ```
 
+<details>
+<summary>Expected Output</summary>
+
+```text
+(Expected result for Exercise 1)
+```
+</details>
+
 ### Exercise 2
 **Task:** [Describe task]
 
 ```python
 # TODO: Write your code here
 ```
+
+<details>
+<summary>Expected Output</summary>
+
+```text
+(Expected result for Exercise 2)
+```
+</details>
 
 ---
 

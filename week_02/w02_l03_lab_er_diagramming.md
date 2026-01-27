@@ -3,7 +3,7 @@ title: "Lab: ER Diagramming with Mermaid.js"
 week: 02
 type: lab
 tags: [design, mermaid, er diagrams]
-difficulty: introductory
+difficulty: intermediate
 duration: "60 mins"
 ---
 
@@ -51,6 +51,7 @@ erDiagram
         string student_id
         string name
         string email
+        date dob
     }
     COURSE {
         string course_code
@@ -101,6 +102,33 @@ erDiagram
     %% TODO: Add PKs to Student, Course, Professor, Department
 ```
 
+<details>
+<summary>Expected Output</summary>
+
+```mermaid
+erDiagram
+    STUDENT {
+        string student_id PK
+        string name
+        string email
+        date dob
+    }
+    COURSE {
+        string course_code PK
+        string title
+        int credits
+    }
+    PROFESSOR {
+        string employee_id PK
+        string name
+    }
+    DEPARTMENT {
+        string name PK
+        string building
+    }
+```
+</details>
+
 ### Exercise 2: The "Phone Number" Problem
 **Task:** A Student can have *multiple* phone numbers (Mobile, Home, Emergency).
 **Question:** How do we model this?
@@ -117,19 +145,90 @@ erDiagram
     %% TODO: Link STUDENT ||--o{ PHONE_NUMBER : has
 ```
 
+<details>
+<summary>Expected Output</summary>
+
+```mermaid
+erDiagram
+    STUDENT {
+        string student_id PK
+        string name
+        string email
+        date dob
+    }
+    PHONE_NUMBER {
+        int id PK
+        string number
+        string type
+    }
+    STUDENT ||--o{ PHONE_NUMBER : has
+```
+</details>
+
 ### Exercise 3: The "Waitlist" Constraint
 **Task:** We need to track *when* a student enrolled.
 **Insight:** An M:N relationship (`enrolls_in`) cannot hold attributes itself in a simple line. We usually describe this attribute on the relationship.
 **Action:** In the next lesson, we will turn this relationship into a table. For now, just note that the *relationship itself* needs an attribute: `enrollment_date`.
 
+<details>
+<summary>Expected Insight</summary>
+
+The M:N relationship between `STUDENT` and `COURSE` will become a **Junction Table** called `ENROLLMENT` in the next lesson. This table will contain:
+- `student_id` (FK)
+- `course_code` (FK)
+- `enrollment_date` (the relationship attribute)
+
+This pattern is fundamental to relational database design.
+</details>
+
 ---
 
-## 5. Summary
+---
+
+## 5. Complete ERD: University Course Registration System
+
+Here is the complete ER Diagram combining all entities and relationships:
+
+```mermaid
+erDiagram
+    DEPARTMENT {
+        string dept_id PK
+        string name
+        string building
+    }
+    PROFESSOR {
+        string employee_id PK
+        string name
+    }
+    COURSE {
+        string course_code PK
+        string title
+        int credits
+    }
+    STUDENT {
+        string student_id PK
+        string name
+        string email
+        date dob
+    }
+    PHONE_NUMBER {
+        int id PK
+        string number
+        string type
+    }
+
+    DEPARTMENT ||--|{ PROFESSOR : employs
+    PROFESSOR ||--o{ COURSE : teaches
+    STUDENT }|--|{ COURSE : enrolls_in
+    STUDENT ||--o{ PHONE_NUMBER : has
+```
+
+---
+
+## 6. Summary
 You have successfully:
 1.  Parsed text requirements into **Entities**.
 2.  Defined **Relationships** (1:N, M:N).
-3.  modeled a complex attribute (Multivalued Phone Number) by creating a new Entity.
+3.  Modeled a complex attribute (Multivalued Phone Number) by creating a new Entity.
 
 *Next:* In Lesson 4, we will convert this visual diagram into actual Tables.
-
-```

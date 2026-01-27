@@ -15,16 +15,83 @@ The course materials are treated as **software artifacts**. They must be modular
     *   **"Why this matters":** Every major section should explain the industry relevance.
     *   **FAQ / Industry Reality:** Address common "Student vs. Professional" misconceptions (e.g., "Pandas vs. SQL").
     *   **Links:** Direct references to the corresponding Practical document (e.g., "See this implemented in Lab 1.2").
+    *   **Further Reading:** Curated links to external resources for self-study (see Depth Considerations below).
+
+#### Depth Considerations
+Concept files should balance in-class coverage with opportunities for deeper self-study. Content is categorized as:
+
+| Content Type | Purpose | Format |
+| :--- | :--- | :--- |
+| **Core Content** | Must be understood in class. Covers the "what" and "why." | Regular sections |
+| **Deep Dive** | Extended explanations, mathematical foundations, or edge cases for advanced topics. Optional reading. | Collapsible `<details>` block with clear "Deep Dive" label |
+| **Further Reading** | External resources for self-study after class. | Dedicated section at end of document |
+
+**When to include a Deep Dive:**
+*   Topics with mathematical or theoretical foundations (e.g., normalization proofs, set theory, B-tree complexity)
+*   Edge cases and exceptions that are important but not essential for basic understanding
+*   Historical context or alternative approaches
+
+**Further Reading sources (in order of preference):**
+1.  **Textbook:** *Database Design - 2nd Edition* by Adrienne Watt (suggested course textbook)
+2.  **Official Documentation:** PostgreSQL docs, Python docs, library references
+3.  **Quality Articles:** Well-written blog posts, tutorials, or conference talks
+
+*Note:* Always provide at least 2-3 Further Reading links per concept file.
+
+**Module-Specific Reading:**
+The course textbook covers Modules 1-2 (Relational Foundations, Analytical SQL). For later modules, prioritize official documentation and quality articles:
+
+| Module | Primary Reading Sources |
+| :--- | :--- |
+| Module 1-2 (Relational, SQL) | Textbook + PostgreSQL/DuckDB docs |
+| Module 3 (NoSQL) | MongoDB University, Redis docs |
+| Module 4 (Data Access) | SQLAlchemy docs, ORM tutorials |
+| Module 5 (Vector DBs, RAG) | ChromaDB/LanceDB docs, LangChain tutorials |
 
 ### B. Practical Document (`*_lab.md`)
 *   **Goal:** Build muscle memory, demonstrate syntax, and solve concrete problems.
 *   **Tone:** Instructional, imperative, and streamlined.
+*   **Execution Environment:** Labs are written in Markdown and converted to **Google Colab notebooks** via `jupytext`. Since Colab environments are ephemeral, each lab must be self-contained.
 *   **Key Elements:**
     *   **Prerequisites:** Explicit list of required libraries or previous labs.
-    *   **Setup Block:** Standardized import/connection code block at the top.
+    *   **Setup Block:** A dedicated **first code cell** that:
+        1.  Installs required packages (`!pip install -q ...`)
+        2.  Imports libraries
+        3.  Establishes database connections (if applicable)
+
+        *Note:* For Mermaid diagrams in labs, use the `mermaid-py` package.
     *   **Iterative Code:** Start simple, then refactor. Show "Bad vs. Good" patterns (e.g., looping vs. vectorization).
     *   **"Your Turn":** Small, unguided exercises sprinkled throughout (marked as `# TODO`).
-    *   **Output:** Expected output samples (tables, JSON) so students can verify correctness without running the code immediately.
+    *   **Output:** Expected output samples (tables, JSON) in **collapsible `<details>` blocks**, so students can verify correctness without spoilers.
+
+#### Setup Block Template
+```python
+# Setup: Run this cell first
+!pip install -q sqlalchemy psycopg2-binary pandas mermaid-py
+
+import pandas as pd
+from sqlalchemy import create_engine
+from mermaid import Mermaid
+
+# Database connection (adjust for your environment)
+DB_URL = "postgresql://user:pass@host:5432/dbname"
+engine = create_engine(DB_URL)
+%load_ext sql
+%sql engine
+```
+
+#### Expected Output Template
+```html
+<details>
+<summary>Expected Output</summary>
+
+| id | name  |
+|----|-------|
+| 1  | Alice |
+| 2  | Bob   |
+
+</details>
+```
 
 ## 3. Standardized Components
 
@@ -47,11 +114,28 @@ duration: "45 mins"
 *   **Assets:** Binary images (screenshots, complex schemas) go into a local `assets/` folder.
 
 ### Code Blocks
-*   **Language Tag:** Always specify language (e.g., ```` ```sql ````, ```` ```python ````).
+*   **Language Tag:** Always specify language.
 *   **Runnable:** All code in Practical docs must be copy-paste runnable in the target environment (Colab/Local).
+*   **SQL in Labs vs. Concepts:**
+    | Document Type | SQL Language Tag | Reason |
+    | :--- | :--- | :--- |
+    | `*_concept.md` | ` ```sql ` | Read-only, illustrative snippets |
+    | `*_lab.md` | ` ```python ` | Uses IPython SQL magic (`%sql`, `%%sql`); `sql` tag confuses jupytext conversion |
+
+    *Example (Lab file):*
+    ```python
+    %%sql
+    SELECT * FROM students WHERE enrolled = TRUE;
+    ```
 
 ## 4. Directory Structure Proposal
 A hierarchical structure that groups related materials by week, keeping assets local to the lesson.
+
+**Naming Convention:** `wXX_lYY_type_name.md`
+*   `wXX` = Week number (e.g., `w01`, `w02`)
+*   `lYY` = Lesson number (e.g., `l01`, `l02`)
+*   `type` = Document type (`concept`, `lab`, `challenge`)
+*   Each lesson has **both** a concept and lab file with the **same lesson number**.
 
 ```text
 comp4098_material/
@@ -59,14 +143,20 @@ comp4098_material/
 │   ├── assets/
 │   │   └── data_lifecycle_diagram.png
 │   ├── data/
-│   │   └── raw_logs.csv
+│   │   └── sample_data.csv
 │   ├── w01_l01_concept_foundations.md
-│   └── w01_l02_lab_intro_pandas.md
+│   ├── w01_l01_lab_data_lifecycle.md
+│   ├── w01_l02_concept_relational_model.md
+│   └── w01_l02_lab_keys_integrity.md
 ├── week_02/
-│   ├── ...
+│   ├── w02_l03_concept_er_modeling.md
+│   ├── w02_l03_lab_er_diagramming.md
+│   ├── w02_l04_concept_logical_design.md
+│   └── w02_l04_lab_schema_conversion.md
 └── _templates/
     ├── concept_template.md
-    └── lab_template.md
+    ├── lab_template.md
+    └── challenge_template.md
 ```
 
 ## 5. Workflow & Automation Ideas
@@ -89,7 +179,24 @@ Consider adding a third document type: **The Challenge (`*_challenge.md`)**.
 
 ## 6. Design Checklist
 Before finalizing a week's content:
-- [ ] Do the learning objectives in Concept match the tasks in Lab?
-- [ ] Are all external datasets accessible (or included in `data/`)?
+
+**Concept Files:**
+- [ ] Do the learning objectives match the tasks in the corresponding Lab?
 - [ ] Is the terminology consistent between Concept and Lab?
+- [ ] Does the Concept file have a Further Reading section with 2-3 links?
+- [ ] Are Deep Dive sections (if any) in collapsible `<details>` blocks?
+
+**Lab Files:**
+- [ ] Does the Lab file have a Setup Block with package installation?
+- [ ] Are expected outputs in collapsible `<details>` blocks?
+- [ ] Are SQL blocks using `python` tag (not `sql`) for jupytext compatibility?
 - [ ] Does the "Bad" example clearly explain *why* it is bad?
+
+**General:**
+- [ ] Are all external datasets accessible (or included in `data/`)?
+- [ ] Do file names follow the `wXX_lYY_type_name.md` convention?
+
+**Challenge Files (if applicable):**
+- [ ] Is the scenario realistic and industry-relevant?
+- [ ] Are hints provided without giving away the solution?
+- [ ] Are submission criteria clearly defined?

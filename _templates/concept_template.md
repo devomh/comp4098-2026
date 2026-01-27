@@ -52,7 +52,22 @@ Contrast this concept with another (e.g., OLTP vs. OLAP).
 
 ---
 
-## 5. FAQ / Industry Reality
+## 5. Deep Dive: [Advanced Topic] (Optional)
+*Use this section for mathematical foundations, proofs, edge cases, or historical context. Mark clearly as optional reading.*
+
+<details>
+<summary>Click to expand: [Topic Name]</summary>
+
+### Mathematical Foundation / Extended Explanation
+Extended content here. This section is for students who want deeper understanding but is not required for the core learning objectives.
+
+*Example topics: normalization proofs, set theory foundations, algorithm complexity, historical evolution of the concept.*
+
+</details>
+
+---
+
+## 6. FAQ / Industry Reality
 *Addressing common misconceptions.*
 
 ### "Question goes here?"
@@ -60,7 +75,24 @@ Contrast this concept with another (e.g., OLTP vs. OLAP).
 
 ---
 
-## 6. Summary & Next Steps
+## 7. Summary & Next Steps
 Recap the main points.
 
 *   **Next:** Go to the Practical Lab `w00_l00_lab_title.md` to implement this in code.
+
+---
+
+## 8. Further Reading
+*Curated resources for deeper self-study.*
+
+### Textbook
+*   **Database Design - 2nd Edition** by Adrienne Watt
+    *   Chapter X: [Relevant Chapter Title]
+
+### Documentation
+*   [PostgreSQL Documentation: Topic Name](https://www.postgresql.org/docs/)
+*   [Python Docs: Relevant Module](https://docs.python.org/3/)
+
+### Articles & Tutorials
+*   [Article Title](https://example.com) — Brief description of why this is valuable.
+*   [Blog Post Title](https://example.com) — What the reader will learn.

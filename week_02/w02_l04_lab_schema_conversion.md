@@ -88,6 +88,18 @@ Define the schemas for the remaining parts of our model. You can write them in m
 | `student_id` | Integer | PK |
 | ... | ... | ... |
 
+<details>
+<summary>Expected Output</summary>
+
+| Column Name | Data Type | Key Type (PK/FK) |
+| :--- | :--- | :--- |
+| `student_id` | Integer | PK |
+| `name` | Varchar | |
+| `email` | Varchar | |
+| `dob` | Date | |
+
+</details>
+
 ### Exercise 2: Multivalued Attributes (Phone Numbers)
 **Task:** In Lesson 3, we decided `PhoneNumbers` should be a separate entity.
 **Action:** Define the schema for the `student_phones` table.
@@ -98,6 +110,21 @@ Define the schemas for the remaining parts of our model. You can write them in m
 | `student_id` | Integer | FK, PK |
 | `phone_number` | Varchar | PK |
 | `type` | Varchar | (e.g. 'Mobile') |
+
+<details>
+<summary>Expected Output & Explanation</summary>
+
+The schema above is correct! Key points:
+
+| Column Name | Data Type | Key Type | Notes |
+| :--- | :--- | :--- | :--- |
+| `student_id` | Integer | FK, PK | References `students.student_id` |
+| `phone_number` | Varchar | PK | Part of composite key |
+| `type` | Varchar | | 'Mobile', 'Home', 'Emergency' |
+
+**Why Composite PK?** A student can have multiple phone numbers. The combination of (`student_id`, `phone_number`) uniquely identifies each record. This follows the **Weak Entity** pattern: the phone number's identity depends on which student it belongs to.
+
+</details>
 
 ### Exercise 3: Self-Referencing Relationship (Prerequisites)
 **Task:** A Course can have a *Prerequisite* (which is also a Course).
@@ -111,8 +138,44 @@ Define the schemas for the remaining parts of our model. You can write them in m
 | :--- | :--- | :--- |
 | ... | ... | ... |
 
+<details>
+<summary>Expected Output</summary>
+
+| Column Name | Data Type | Key Type (PK/FK) | Notes |
+| :--- | :--- | :--- | :--- |
+| `course_code` | Char(8) | PK | |
+| `title` | Varchar | | |
+| `credits` | Integer | | |
+| `prereq_code` | Char(8) | FK | References `courses.course_code`, **NULLABLE** |
+
+**Key Insight:** The `prereq_code` column is a **self-referencing Foreign Key**. It points back to the same table's Primary Key. Courses with no prerequisites have `prereq_code = NULL`.
+
+**Example Data:**
+| course_code | title | credits | prereq_code |
+| :--- | :--- | :--- | :--- |
+| SQL101 | Intro to SQL | 3 | NULL |
+| SQL201 | Advanced SQL | 3 | SQL101 |
+| DB301 | Database Design | 4 | SQL201 |
+
+</details>
+
 ---
 
-## 6. Summary
+## 7. Complete Schema Summary
+
+Here is the complete logical schema for the University Course Registration System:
+
+| Table | Columns | Primary Key | Foreign Keys |
+| :--- | :--- | :--- | :--- |
+| `departments` | dept_id, name, building | dept_id | - |
+| `professors` | emp_id, name, dept_id | emp_id | dept_id → departments |
+| `courses` | course_code, title, credits, prereq_code | course_code | prereq_code → courses |
+| `students` | student_id, name, email, dob | student_id | - |
+| `student_phones` | student_id, phone_number, type | (student_id, phone_number) | student_id → students |
+| `enrollments` | student_id, course_code, enrollment_date | (student_id, course_code) | student_id → students, course_code → courses |
+
+---
+
+## 8. Summary
 You have now converted a visual diagram into a set of strict table definitions.
 *   **Next Week:** We will write the `CREATE TABLE` SQL statements to actually build this in PostgreSQL!
