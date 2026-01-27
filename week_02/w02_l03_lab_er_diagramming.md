@@ -10,14 +10,27 @@ duration: "60 mins"
 # Lab: ER Diagramming with Mermaid.js
 
 ## 1. Prerequisites & Setup
-*   **Tool:** We will use **Mermaid.js**, a diagramming tool that renders text as diagrams.
-*   **Environment:** You can write Mermaid code directly in Markdown cells in Jupyter/Colab or any Markdown editor.
+*   **Tool:** We will use **mermaid-py**, a Python package that renders Mermaid diagrams in Jupyter/Colab.
+*   **Concept Review:** Ensure you have read `w02_l03_concept_er_modeling.md`.
 
-### How to use Mermaid
-In a Markdown file or cell, wrap your code like this:
-```mermaid
+### Environment Setup
+Run this block first to install packages and initialize your environment.
+```python
+# Setup: Run this cell first (required for Colab)
+!pip install -q mermaid-py
+
+from mermaid import Mermaid
+
+print("Setup complete! Ready to create ER diagrams.")
+```
+
+### How to use mermaid-py
+In a code cell, use the `Mermaid()` function with your diagram definition:
+```python
+Mermaid("""
 erDiagram
     ENTITY1 ||--o{ ENTITY2 : label
+""")
 ```
 
 ---
@@ -45,7 +58,8 @@ Why not just use Excel? Imagine trying to store this in one sheet:
 ### The "Better" Approach (Entities)
 Let's decouple these into distinct Entities.
 
-```mermaid
+```python
+Mermaid("""
 erDiagram
     STUDENT {
         string student_id
@@ -66,6 +80,7 @@ erDiagram
         string name
         string building
     }
+""")
 ```
 
 ---
@@ -78,11 +93,13 @@ Now, let's connect the "Nouns" with "Verbs" based on the rules.
 2.  A **Professor** can teach many **Courses**, but a **Course** is taught by only one **Professor** (for simplicity) (1:N).
 3.  A **Student** can enroll in many **Courses**, and a **Course** can have many **Students** (M:N).
 
-```mermaid
+```python
+Mermaid("""
 erDiagram
     DEPARTMENT ||--|{ PROFESSOR : employs
     PROFESSOR ||--o{ COURSE : teaches
     STUDENT }|--|{ COURSE : enrolls_in
+""")
 ```
 
 ### Combining it all
@@ -97,15 +114,24 @@ Now it's your turn to refine this model.
 **Task:** Copy the entities above. Add the correct **PK** (Primary Key) label to the unique identifiers.
 **Hint:** in Mermaid, write `type name PK`.
 
-```mermaid
+```python
+# TODO: Add PKs to Student, Course, Professor, Department
+Mermaid("""
 erDiagram
-    %% TODO: Add PKs to Student, Course, Professor, Department
+    STUDENT {
+        string student_id
+        string name
+        string email
+        date dob
+    }
+""")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
-```mermaid
+```python
+Mermaid("""
 erDiagram
     STUDENT {
         string student_id PK
@@ -126,6 +152,7 @@ erDiagram
         string name PK
         string building
     }
+""")
 ```
 </details>
 
@@ -139,16 +166,25 @@ erDiagram
 *   It should have an `id` and a `number`.
 *   Link it to `STUDENT` with the correct cardinality (One Student has Many Phones).
 
-```mermaid
+```python
+# TODO: Create PHONE_NUMBER entity
+# TODO: Link STUDENT ||--o{ PHONE_NUMBER : has
+Mermaid("""
 erDiagram
-    %% TODO: Create PHONE_NUMBER entity
-    %% TODO: Link STUDENT ||--o{ PHONE_NUMBER : has
+    STUDENT {
+        string student_id PK
+        string name
+        string email
+        date dob
+    }
+""")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
-```mermaid
+```python
+Mermaid("""
 erDiagram
     STUDENT {
         string student_id PK
@@ -162,6 +198,7 @@ erDiagram
         string type
     }
     STUDENT ||--o{ PHONE_NUMBER : has
+""")
 ```
 </details>
 
@@ -183,13 +220,12 @@ This pattern is fundamental to relational database design.
 
 ---
 
----
-
 ## 5. Complete ERD: University Course Registration System
 
 Here is the complete ER Diagram combining all entities and relationships:
 
-```mermaid
+```python
+Mermaid("""
 erDiagram
     DEPARTMENT {
         string dept_id PK
@@ -221,6 +257,7 @@ erDiagram
     PROFESSOR ||--o{ COURSE : teaches
     STUDENT }|--|{ COURSE : enrolls_in
     STUDENT ||--o{ PHONE_NUMBER : has
+""")
 ```
 
 ---

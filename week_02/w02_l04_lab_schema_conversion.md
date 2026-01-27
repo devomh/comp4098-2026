@@ -9,9 +9,21 @@ duration: "60 mins"
 
 # Lab: Schema Conversion
 
-## 1. Prerequisites
+## 1. Prerequisites & Setup
 *   **Context:** This lab builds directly on the ER Diagram from Lesson 3.
 *   **Goal:** Convert the "University Course Registration" ERD into a set of Relational Schemas (Logical Table Definitions).
+*   **Concept Review:** Ensure you have read `w02_l04_concept_logical_design.md`.
+
+### Environment Setup
+Run this block first to set up the visualization tools.
+```python
+# Setup: Run this cell first (required for Colab)
+!pip install -q mermaid-py
+
+from mermaid import Mermaid
+
+print("Setup complete! Ready for schema conversion.")
+```
 
 ---
 
@@ -161,7 +173,7 @@ The schema above is correct! Key points:
 
 ---
 
-## 7. Complete Schema Summary
+## 6. Complete Schema Summary
 
 Here is the complete logical schema for the University Course Registration System:
 
@@ -174,8 +186,54 @@ Here is the complete logical schema for the University Course Registration Syste
 | `student_phones` | student_id, phone_number, type | (student_id, phone_number) | student_id → students |
 | `enrollments` | student_id, course_code, enrollment_date | (student_id, course_code) | student_id → students, course_code → courses |
 
+### Visual Schema (ERD with Foreign Keys)
+```python
+Mermaid("""
+erDiagram
+    departments {
+        int dept_id PK
+        varchar name
+        varchar building
+    }
+    professors {
+        int emp_id PK
+        varchar name
+        int dept_id FK
+    }
+    courses {
+        char course_code PK
+        varchar title
+        int credits
+        char prereq_code FK
+    }
+    students {
+        int student_id PK
+        varchar name
+        varchar email
+        date dob
+    }
+    student_phones {
+        int student_id PK_FK
+        varchar phone_number PK
+        varchar type
+    }
+    enrollments {
+        int student_id PK_FK
+        char course_code PK_FK
+        date enrollment_date
+    }
+
+    departments ||--|{ professors : employs
+    professors ||--o{ courses : teaches
+    courses ||--o| courses : requires
+    students ||--o{ student_phones : has
+    students ||--o{ enrollments : has
+    courses ||--o{ enrollments : has
+""")
+```
+
 ---
 
-## 8. Summary
+## 7. Summary
 You have now converted a visual diagram into a set of strict table definitions.
-*   **Next Week:** We will write the `CREATE TABLE` SQL statements to actually build this in PostgreSQL!
+*   **Next Week:** We will write the `CREATE TABLE` SQL statements to build this schema in a database!

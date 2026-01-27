@@ -183,14 +183,77 @@ When you follow the mapping rules correctly, you are already doing much of the w
 
 ---
 
-## 9. FAQ / Industry Reality
+## 9. Deep Dive: Surrogate vs. Natural Keys (Optional)
+
+<details>
+<summary>Click to expand: The Great Key Debate</summary>
+
+### The Question
+When designing a Primary Key, you have two choices:
+1. **Natural Key:** Use an existing, meaningful attribute (e.g., `email`, `isbn`, `ssn`)
+2. **Surrogate Key:** Create an artificial identifier (e.g., `id`, `student_id` as auto-increment)
+
+### Natural Keys
+
+**Pros:**
+- Meaningful to humans (easier debugging)
+- No extra column needed
+- Enforces uniqueness on business data
+
+**Cons:**
+- Can change (emails change, ISBNs get corrected)
+- May be composite (multiple columns)
+- Privacy concerns (SSN as PK is a bad idea)
+- Performance issues with string keys in joins
+
+**Example:** Using `email` as PK for a `users` table.
+
+### Surrogate Keys
+
+**Pros:**
+- Never changes (stable references)
+- Simple (single integer column)
+- Fast joins (integer comparison)
+- No business logic dependency
+
+**Cons:**
+- Extra column and index
+- No inherent meaning
+- Possible to have duplicate "real" data if uniqueness not enforced separately
+
+**Example:** Using `user_id` (auto-increment) as PK, with a `UNIQUE` constraint on `email`.
+
+### Industry Practice
+Most production systems use **Surrogate Keys** with additional `UNIQUE` constraints on natural identifiers:
+
+```sql
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,        -- Surrogate key
+    email VARCHAR(255) UNIQUE NOT NULL, -- Natural key as constraint
+    name VARCHAR(100)
+);
+```
+
+### When Natural Keys Make Sense
+- **Lookup/Reference Tables:** Country codes (`US`, `CA`), currency codes (`USD`, `EUR`)
+- **Standards-based IDs:** ISBN (books), ISIN (securities) — though even these sometimes need correction
+- **Junction Tables:** The composite key (`student_id`, `course_code`) is technically "natural" to the relationship
+
+### The Practical Answer
+> **Default to Surrogate Keys** for entity tables. Use Natural Keys for small, stable reference data. Always add `UNIQUE` constraints on meaningful business identifiers regardless of key choice.
+
+</details>
+
+---
+
+## 10. FAQ / Industry Reality
 
 ### "Can't I just use an Array column in Postgres?"
 **Answer:** Postgres *does* support Array types. For simple lists (like tags), this is fine. But for relationships where you need to *join* or *query* the related data efficiently (e.g., "Find all students in Math 101"), standard Junction Tables are significantly faster and enforce integrity constraints that arrays cannot easily do.
 
 ---
 
-## 10. Summary & Next Steps
+## 11. Summary & Next Steps
 *   **Strong Entity** = New Table.
 *   **1:N** = FK in the Child ("Many") table.
 *   **M:N** = New "Junction" Table with two FKs.
@@ -198,3 +261,21 @@ When you follow the mapping rules correctly, you are already doing much of the w
 *   **Self-Referencing** = FK pointing to the same table's PK.
 *   **Normalization** = Proper mapping sets you up for 1NF-3NF compliance (Week 3).
 *   **Next:** Go to the Practical Lab `w02_l04_lab_schema_conversion.md` to write these schemas out.
+
+---
+
+## 12. Further Reading
+*Curated resources for deeper self-study.*
+
+### Textbook
+*   **Database Design - 2nd Edition** by Adrienne Watt
+    *   [Chapter 9: Integrity Rules and Constraints](https://opentextbc.ca/dbdesign01/chapter/chapter-9-integrity-rules-and-constraints/)
+    *   [Chapter 10: ER Modelling](https://opentextbc.ca/dbdesign01/chapter/chapter-10-er-modelling/)
+
+### Documentation
+*   [PostgreSQL: CREATE TABLE](https://www.postgresql.org/docs/current/sql-createtable.html) — Official reference for table creation syntax.
+*   [DuckDB: CREATE TABLE](https://duckdb.org/docs/sql/statements/create_table.html) — DuckDB's table creation syntax (similar to PostgreSQL).
+
+### Articles & Tutorials
+*   [Database Keys Explained (DbVisualizer)](https://www.dbvis.com/thetable/database-keys-explained/) — Comprehensive guide to primary, foreign, and composite keys.
+*   [Surrogate vs. Natural Keys (Vertabelo)](https://vertabelo.com/blog/surrogate-key/) — In-depth comparison with real-world examples.

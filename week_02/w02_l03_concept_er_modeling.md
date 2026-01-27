@@ -107,7 +107,55 @@ erDiagram
 
 ---
 
-## 5. FAQ / Industry Reality
+## 5. Deep Dive: ER Notation Styles (Optional)
+
+<details>
+<summary>Click to expand: Chen Notation vs. Crow's Foot Notation</summary>
+
+### Historical Context
+ER Modeling was introduced by Peter Chen in 1976. His original notation (now called **Chen Notation**) uses:
+- **Rectangles** for Entities
+- **Diamonds** for Relationships
+- **Ovals** for Attributes
+- **Lines** connecting them with cardinality labels (1, N, M)
+
+### Chen Notation Example
+```
+┌──────────┐         ┌─────────────┐         ┌──────────┐
+│ STUDENT  │────────◇│  enrolls_in │◇────────│  COURSE  │
+└──────────┘    M    └─────────────┘    N    └──────────┘
+```
+
+### Crow's Foot Notation
+The **Crow's Foot** (or **IE Notation**) is now the industry standard. It's more compact and visually intuitive:
+- Entities are rectangles (with attributes inside)
+- Relationships are lines with symbols at the ends
+- The "crow's foot" (three-pronged fork) indicates "many"
+
+| Symbol | Meaning |
+| :---: | :--- |
+| `\|` | One (mandatory) |
+| `○` | Zero (optional) |
+| `<` or crow's foot | Many |
+
+### Why Crow's Foot Won
+1. **Compactness:** Attributes inside the entity box saves space
+2. **Readability:** The fork visually suggests "many" without needing labels
+3. **Tool Support:** Most modern tools (ERDPlus, Lucidchart, Mermaid) default to Crow's Foot
+
+### Extended ER (EER) Concepts
+For complex domains, **Extended ER** adds:
+- **Specialization/Generalization:** Inheritance hierarchies (e.g., `Person` → `Student`, `Professor`)
+- **Categories (Union Types):** An entity that can be one of several types
+- **Aggregation:** Treating a relationship as an entity
+
+*These advanced concepts are covered in graduate-level database courses but are good to know exist.*
+
+</details>
+
+---
+
+## 6. FAQ / Industry Reality
 
 ### "Do we really draw these for every project?"
 **Answer:** In full-scale application development? **Yes.** In ad-hoc Data Science tasks? **Sometimes.** However, even if you don't draw it, you *must* think it. When you join two DataFrames in Pandas, you are implicitly relying on the relationships defined in an ER model. If you misunderstand the cardinality (e.g., assuming 1:1 when it's 1:N), your analysis (sums, counts) will be wrong due to row duplication.
@@ -117,7 +165,23 @@ erDiagram
 
 ---
 
-## 6. Summary & Next Steps
+## 7. Summary & Next Steps
 *   **Entities** are the "Nouns", **Attributes** are the properties, **Relationships** are the "Verbs".
 *   **Cardinality** dictates the rules of association.
 *   **Next:** Go to the Practical Lab `w02_l03_lab_er_diagramming.md` to design the system for a University.
+
+---
+
+## 8. Further Reading
+*Curated resources for deeper self-study.*
+
+### Textbook
+*   **Database Design - 2nd Edition** by Adrienne Watt
+    *   [Chapter 8: The Entity Relationship Data Model](https://opentextbc.ca/dbdesign01/chapter/chapter-8-the-entity-relationship-data-model/)
+
+### Documentation
+*   [Mermaid.js ER Diagram Syntax](https://mermaid.js.org/syntax/entityRelationshipDiagram.html) — Official reference for creating ER diagrams in Mermaid.
+
+### Articles & Tutorials
+*   [Entity-Relationship Model (Wikipedia)](https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model) — Comprehensive overview including history and notation variants.
+*   [Crow's Foot Notation (Vertabelo)](https://vertabelo.com/blog/crow-s-foot-notation/) — Visual guide to reading and writing Crow's Foot diagrams.
