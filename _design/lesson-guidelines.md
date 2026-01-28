@@ -128,6 +128,15 @@ duration: "45 mins"
     SELECT * FROM students WHERE enrolled = TRUE;
     ```
 
+*   **Non-Runnable Code Blocks (Labs):** For code blocks in lab files that should **not** be converted to code cells by jupytext (e.g., expected output in `<details>` blocks, illustrative snippets), use **tildes** instead of backticks:
+
+    ~~~python
+    # This will NOT become a code cell
+    print("Expected output")
+    ~~~
+
+    Jupytext does not convert tilde-fenced blocks, making them safe for display-only code.
+
 ## 4. Directory Structure Proposal
 A hierarchical structure that groups related materials by week, keeping assets local to the lesson.
 
