@@ -18,7 +18,9 @@ Run this block first to install packages and initialize your environment.
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q mermaid-py
+```
 
+```python
 from mermaid import Mermaid
 
 print("Setup complete! Ready to create ER diagrams.")
@@ -130,7 +132,7 @@ erDiagram
 <details>
 <summary>Expected Output</summary>
 
-```python
+~~~python
 Mermaid("""
 erDiagram
     STUDENT {
@@ -153,7 +155,7 @@ erDiagram
         string building
     }
 """)
-```
+~~~
 </details>
 
 ### Exercise 2: The "Phone Number" Problem
@@ -183,7 +185,7 @@ erDiagram
 <details>
 <summary>Expected Output</summary>
 
-```python
+~~~python
 Mermaid("""
 erDiagram
     STUDENT {
@@ -199,7 +201,7 @@ erDiagram
     }
     STUDENT ||--o{ PHONE_NUMBER : has
 """)
-```
+~~~
 </details>
 
 ### Exercise 3: The "Waitlist" Constraint
@@ -267,5 +269,3 @@ You have successfully:
 1.  Parsed text requirements into **Entities**.
 2.  Defined **Relationships** (1:N, M:N).
 3.  Modeled a complex attribute (Multivalued Phone Number) by creating a new Entity.
-
-*Next:* In Lesson 4, we will convert this visual diagram into actual Tables.

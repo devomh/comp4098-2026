@@ -25,6 +25,14 @@ In Data Science and Engineering, jumping straight to `CREATE TABLE` often leads 
 
 > **Analogy:** Think of an **ER Diagram** like the **Architectural Blueprints** of a house. It shows where the rooms (Entities) are and how they connect (Relationships), but it doesn't specify which brand of bricks (Database Engine) to use.
 
+### The Database Design Hierarchy
+
+| Level | Model | Focus |
+|-------|-------|-------|
+| **Conceptual** | ER Model | Business concepts, entities, relationships |
+| **Logical** | Relational Model | Tables, columns, keys, constraints |
+| **Physical** | Implementation | Indexes, storage, partitioning |
+
 ---
 
 ## 3. Core Concept A: Entities & Attributes
@@ -52,19 +60,49 @@ erDiagram
         string name
         string address
     }
-    %% Weak Entity
+    %% Weak Entity (PK = Owner's PK + Partial Key)
     ROOM {
-        int room_number
+        string hotel_id PK,FK
+        int room_number PK
         string type
     }
-    
+
     HOTEL ||--o{ ROOM : contains
 ```
+
+> **Example:** Now consider a **Department** and its **Employees**.
+> *   `Department` is a **Strong Entity** (It has a unique ID).
+> *   `Employee` is also a **Strong Entity**. An employee has their own unique ID and can exist independently (be transferred, exist before assignment).
+
+```mermaid
+erDiagram
+    %% Two Strong Entities
+    DEPARTMENT {
+        string dept_id PK
+        string name
+    }
+    EMPLOYEE {
+        string employee_id PK
+        string name
+        string dept_id FK
+    }
+
+    DEPARTMENT |o--o{ EMPLOYEE : employs
+```
+
+**Key distinction:**
+
+| Relationship Type | FK in Child Entity |
+|-------------------|-------------------|
+| Strong ↔ Strong | FK is a regular attribute |
+| Strong ↔ Weak | FK is part of the composite PK |
 
 ### Key Takeaway
 *   **Nouns** in your requirements usually become **Entities**.
 *   **Adjectives** usually become **Attributes**.
 *   Weak entities represent "parts" of a whole that don't make sense on their own.
+
+> **Note on Diagrams:** The Mermaid diagrams in this lesson use **Crow's Foot notation**, which is practical for tool support but cannot represent composite or multivalued attributes visually. In true **Chen notation**, these would appear as branching ovals (composite) or double-lined ovals (multivalued). When these attributes are translated to the **relational model**, composite attributes become multiple columns, and multivalued attributes become separate tables. See [ERD Different Notations (OpenDSA)](https://opendsa.cs.vt.edu/ODSA/Books/Database/html/ERDNotations.html) for visual examples of Chen notation.
 
 ---
 
@@ -132,11 +170,11 @@ The **Crow's Foot** (or **IE Notation**) is now the industry standard. It's more
 - Relationships are lines with symbols at the ends
 - The "crow's foot" (three-pronged fork) indicates "many"
 
-| Symbol | Meaning |
-| :---: | :--- |
-| `\|` | One (mandatory) |
-| `○` | Zero (optional) |
-| `<` or crow's foot | Many |
+| Meaning | Visual Symbol | Mermaid Syntax |
+| :--- | :---: | :---: |
+| One (mandatory) | `\|` | `\|` |
+| Zero (optional) | `○` | `o` |
+| Many | $\pitchfork$ (crow's foot) | `{` or `}` |
 
 ### Why Crow's Foot Won
 1. **Compactness:** Attributes inside the entity box saves space
@@ -162,6 +200,9 @@ For complex domains, **Extended ER** adds:
 
 ### "What about NoSQL? Does this still apply?"
 **Answer:** Absolutely. Even if you use MongoDB (Document Store), the *relationships* between your data points still exist. You might choose to *embed* data instead of linking it, but the conceptual relationship (1:N) dictates that decision.
+
+### "Do I have to use Chen notation for ER diagrams?"
+**Answer:** No, you can use either Chen or Crow's Foot notation. **Chen** is often preferred in academic settings because it can visually represent composite, multivalued, and derived attributes. **Crow's Foot** is more common in industry due to its compactness and better tool support (Mermaid, Lucidchart, most database tools). The trade-off: Crow's Foot cannot visually distinguish attribute types, so you'd document those separately. For this course, we use Crow's Foot via Mermaid for practicality — just remember that a multivalued attribute like `PhoneNumbers` implies "this becomes a separate table" even if the diagram doesn't show it.
 
 ---
 
