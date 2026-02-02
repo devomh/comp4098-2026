@@ -33,6 +33,38 @@ In Data Science and Engineering, jumping straight to `CREATE TABLE` often leads 
 | **Logical** | Relational Model | Tables, columns, keys, constraints |
 | **Physical** | Implementation | Indexes, storage, partitioning |
 
+### ER Model vs. Relational Model: Key Differences
+
+Understanding when to use ER diagram conventions vs. relational schema conventions is crucial. Here's a comprehensive comparison:
+
+| Aspect | ER Model (Conceptual) | Relational Model (Logical) |
+|--------|----------------------|---------------------------|
+| **Purpose** | Communicate business logic to stakeholders | Provide implementation blueprint for developers |
+| **Audience** | Business analysts, domain experts, clients | Developers, DBAs, data engineers |
+| **Entity/Table Naming** | **Singular** (e.g., `Student`, `Course`) | **Singular** (preferred) or Plural (e.g., `students`) |
+| **Attribute Data Types** | **NOT specified** – focus on what data exists | **Required** (e.g., `VARCHAR(50)`, `INTEGER`, `DATE`) |
+| **Foreign Keys** | **NOT shown as attributes** – relationships are lines | **Explicitly shown as columns** (e.g., `dept_id FK`) |
+| **Relationships** | Shown as **lines with cardinality** (e.g., `\|\|--o{`) | Implemented via **FK columns** and **constraints** |
+| **M:N Relationships** | Shown as **direct relationship line** | **Must use junction table** (cannot be direct) |
+| **Composite Attributes** | Can be shown with branching (Chen notation) | Become **multiple separate columns** |
+| **Multivalued Attributes** | Special notation (double oval in Chen) | Become a **separate table** with 1:N relationship |
+| **Primary Keys** | Identified but relationship is the focus | **Declared with constraints** (`PRIMARY KEY`) |
+| **Notation** | Chen (diamonds) or Crow's Foot (clean lines) | SQL DDL or annotated table diagrams |
+| **Level of Detail** | High-level, abstract | Detailed, implementation-ready |
+
+**Important Note for This Course:**
+The Mermaid `erDiagram` syntax we use in labs is technically a **hybrid** notation. It uses ER diagram visual style but includes relational model details:
+- **Data types** (e.g., `string`, `int`, `date`) – pure ER wouldn't specify these
+- **FK columns** (e.g., `dept_id FK`) – pure ER would only show relationship lines
+
+This hybrid approach is common in industry tools for practicality, but be aware of the distinction:
+- **Pure ER diagrams**: Attribute names only, no data types, no FK columns
+- **Relational schemas**: Data types required, FK columns explicit
+
+When creating your own diagrams, decide based on your audience:
+- **For business requirements discussions**: Use pure ER (attribute names only, no data types or FK columns)
+- **For implementation planning**: Include data types and FK columns for developer clarity
+
 ---
 
 ## 3. Core Concept A: Entities & Attributes
@@ -52,6 +84,9 @@ In Data Science and Engineering, jumping straight to `CREATE TABLE` often leads 
 > *   `Room` is a **Weak Entity**. "Room 101" is not unique in the world. It is only unique *within* a specific Hotel. If you tear down the Hotel, the Room ceases to exist conceptually.
 
 ### Visual Architecture
+
+> **Notation Note:** The diagrams below use Mermaid's hybrid notation, which shows FK columns inside entities. In a pure ER diagram, you would only see the relationship line (`||--o{`), and the `hotel_id FK` would be determined later during ER-to-Relational conversion. See the comparison table above for the distinction between ER and Relational model conventions.
+
 ```mermaid
 erDiagram
     %% Strong Entity

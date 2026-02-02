@@ -99,8 +99,8 @@ erDiagram
         string title
     }
     ENROLLMENT {
-        int student_id PK_FK
-        string course_code PK_FK
+        int student_id PK,FK
+        string course_code PK,FK
         date enrollment_date
     }
     STUDENT ||--o{ ENROLLMENT : has

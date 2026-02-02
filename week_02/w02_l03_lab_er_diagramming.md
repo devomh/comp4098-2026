@@ -116,6 +116,8 @@ Now it's your turn to refine this model.
 **Task:** Copy the entities above. Add the correct **PK** (Primary Key) label to the unique identifiers.
 **Hint:** in Mermaid, write `type name PK`.
 
+**Note on FKs:** At the pure ER diagram level, we don't include FK columns inside entities - the relationship lines represent those connections. However, when you see examples with `FK` labels in Mermaid diagrams (including the complete solution below), understand that this is the hybrid notation common in industry tools. For this exercise, focus on identifying PKs only.
+
 ```python
 # TODO: Add PKs to Student, Course, Professor, Department
 Mermaid("""
@@ -225,6 +227,8 @@ This pattern is fundamental to relational database design.
 ## 5. Complete ERD: University Course Registration System
 
 Here is the complete ER Diagram combining all entities and relationships:
+
+> **Important:** Notice that this diagram uses Mermaid's hybrid notation. In a **pure conceptual ER diagram**, we would NOT show FK columns inside entities - only the relationship lines. The FKs would be determined later when converting to a relational schema. However, Mermaid (like many industry tools) includes them for practical completeness. See the comparison table in `w02_l03_concept_er_modeling.md` for the distinction between ER model and Relational model conventions.
 
 ```python
 Mermaid("""
