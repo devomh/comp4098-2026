@@ -146,7 +146,7 @@ Use code to demonstrate each anomaly.
 <details>
 <summary>Solution</summary>
 
-```python
+~~~python
 print("=" * 60)
 print("ANOMALY ANALYSIS")
 print("=" * 60)
@@ -184,7 +184,7 @@ print("  ✗ We can't maintain a product catalog independent of orders.")
 
 print("\nCurrent unique products:")
 print(df_retail[['product_id', 'product_name']].drop_duplicates().sort_values('product_id'))
-```
+~~~
 
 **Key Insights:**
 - **Update Anomaly:** Alice's data repeats 7 times. Any update requires 7 changes.
@@ -249,7 +249,7 @@ print(df_retail[['product_id', 'product_name']].drop_duplicates().sort_values('p
 <details>
 <summary>Solution</summary>
 
-```python
+~~~python
 print("=" * 60)
 print("FUNCTIONAL DEPENDENCY ANALYSIS")
 print("=" * 60)
@@ -328,7 +328,7 @@ print("• Composite PK: (order_id, product_id)")
 print("• Partial dependencies violate 2NF (order and product attributes)")
 print("• Transitive dependencies violate 3NF (customer_id → customer_*)")
 print("• Only quantity and sales have full dependencies on the composite key")
-```
+~~~
 
 **Functional Dependency Summary:**
 
@@ -413,7 +413,7 @@ print("• Only quantity and sales have full dependencies on the composite key")
 <details>
 <summary>Solution</summary>
 
-```python
+~~~python
 print("=" * 60)
 print("NORMALIZATION TO 3NF")
 print("=" * 60)
@@ -508,7 +508,7 @@ print(f"  - products: {df_products.shape[0]} × {df_products.shape[1]} = {df_pro
 print(f"  - orders: {df_orders.shape[0]} × {df_orders.shape[1]} = {df_orders.shape[0] * df_orders.shape[1]}")
 print(f"  - order_items: {df_order_items.shape[0]} × {df_order_items.shape[1]} = {df_order_items.shape[0] * df_order_items.shape[1]}")
 print(f"\nReduction: {original_cells - normalized_cells} cells ({((original_cells - normalized_cells) / original_cells * 100):.1f}% savings)")
-```
+~~~
 
 **Normalized Schema Summary:**
 
@@ -534,7 +534,7 @@ Create a Mermaid ERD showing the normalized schema with data types and relations
 <details>
 <summary>Solution</summary>
 
-```python
+~~~python
 Mermaid("""
 erDiagram
     customers {
@@ -571,7 +571,7 @@ erDiagram
     orders ||--|{ order_items : contains
     products ||--o{ order_items : appears_in
 """)
-```
+~~~
 
 **Schema Notes:**
 - **customers**: Stores customer information once per customer
@@ -605,7 +605,7 @@ The normalized schema uses 214 cells vs. 240 in the denormalized version (11% re
 <details>
 <summary>Answer</summary>
 
-```python
+~~~python
 # Original denormalized table
 rows_denorm = 10000
 cols_denorm = 15
@@ -631,7 +631,7 @@ cells_normalized = cells_customers + cells_products + cells_orders + cells_order
 print(f"Denormalized: {cells_denorm:,} cells")
 print(f"Normalized: {cells_normalized:,} cells")
 print(f"Savings: {cells_denorm - cells_normalized:,} cells ({((cells_denorm - cells_normalized) / cells_denorm * 100):.1f}%)")
-```
+~~~
 
 **Output:**
 ```
@@ -656,7 +656,7 @@ In the normalized schema, you need a join. Write the equivalent query for normal
 <details>
 <summary>Answer</summary>
 
-```python
+~~~python
 # Normalized query (requires join)
 alice_orders = (
     df_orders
@@ -667,7 +667,7 @@ alice_orders = (
 )
 
 print(alice_orders[['order_id', 'order_date', 'product_name', 'quantity', 'sales']])
-```
+~~~
 
 **Trade-off Discussion:**
 
