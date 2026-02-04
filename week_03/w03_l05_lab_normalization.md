@@ -20,7 +20,9 @@ Run this block first to set up the environment and load our messy data.
 # Setup: Run this cell first (required for Colab)
 # NOTE: Run cells in order. If you need to restart, re-run this cell first.
 !pip install -q pandas mermaid-py
+```
 
+```python
 import pandas as pd
 from mermaid import Mermaid
 
@@ -454,3 +456,7 @@ You have successfully:
 5.  Decomposed one messy table into four normalized tables.
 
 **Key Insight:** Normalization trades **storage efficiency** and **data integrity** for **query complexity** (more joins). In the next lesson, we'll explore when it makes sense to intentionally denormalize.
+
+---
+
+**Ready for more?** Check the [Week 03 README](README.md) for an advanced challenge that applies these skills to a realistic retail dataset!

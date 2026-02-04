@@ -28,6 +28,35 @@ By the end of this lesson, you will be able to:
 
 Click the badge above to open the lab notebook directly in Google Colab.
 
+### Challenge Exercise
+
+**Ready for a bigger challenge?** Apply your normalization skills to a realistic retail dataset that mimics real-world CSV exports from legacy ERP systems.
+
+**Materials:**
+- [Retail Normalization Challenge](w03_l05_challenge_retail_normalization.md)
+
+### Challenge Notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_03/w03_l05_challenge_retail_normalization.ipynb)
+
+**What's included in the challenge:**
+- 🏪 **15-row retail dataset** with order, customer, product, and shipping data (15 columns)
+- 📊 **Part A:** Identify and demonstrate all three types of anomalies with code
+- 🔍 **Part B:** Complete functional dependency analysis with classification
+- 🛠️ **Part C:** Normalize to 3NF (decompose into 4-5 tables) and verify lossless reconstruction
+- 💭 **Part D:** Reflection questions on trade-offs, query complexity, and real-world application
+- ✅ **Full solutions** with explanations and schema diagrams
+
+**Why take this challenge?**
+- Apply normalization to a dataset that looks like real business data exports
+- Practice the complete workflow: analyze → normalize → verify → reflect
+- Build a portfolio piece demonstrating your database design skills
+- Bridge the gap between theory and data science practice
+
+**Estimated time:** 90 minutes
+
+This challenge is an excellent way to solidify your normalization skills before moving to Week 4's SQL implementation!
+
 ---
 
 ## Lesson 06: Practical Design & Denormalization

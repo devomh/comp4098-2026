@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <style>
+      .relation-box { fill: #f8f9fa; stroke: #2c3e50; stroke-width: 2; }
+      .pk-attr { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; font-weight: bold; }
+      .attr { fill: #fff; stroke: #607d8b; stroke-width: 1.5; }
+      .arrow { stroke: #e74c3c; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-partial { stroke: #ff9800; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead-partial); }
+      .arrow-full { stroke: #4caf50; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead-full); }
+      .line { stroke: #e74c3c; stroke-width: 2; fill: none; }
+      .line-partial { stroke: #ff9800; stroke-width: 2.5; fill: none; }
+      .line-full { stroke: #4caf50; stroke-width: 2.5; fill: none; }
+      .text { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; fill: #2c3e50; }
+      .title { font-family: 'Segoe UI', Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #2c3e50; }
+      .label { font-size: 12px; fill: #7f8c8d; }
+      .warning { font-size: 12px; fill: #ff9800; font-weight: bold; }
+      .success { font-size: 12px; fill: #4caf50; font-weight: bold; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#e74c3c" />
+    </marker>
+    <marker id="arrowhead-partial" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#ff9800" />
+    </marker>
+    <marker id="arrowhead-full" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#4caf50" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="title" style="font-size: 18px;">Second Normal Form (2NF): No Partial Dependencies</text>
+
+  <!-- VIOLATION: Enrollments with partial dependencies -->
+  <g id="violation">
+    <text x="400" y="65" text-anchor="middle" class="title" style="fill: #c62828;">VIOLATION: Non-key attributes depend on PART of composite key</text>
+
+    <!-- Outer box -->
+    <rect x="50" y="85" width="700" height="140" class="relation-box" rx="5"/>
+    <text x="400" y="110" text-anchor="middle" class="title">enrollments (Composite PK: student_id + course_code)</text>
+
+    <!-- Attributes in one row -->
+    <!-- Composite Primary Key Part 1 -->
+    <rect x="70" y="170" width="90" height="30" class="pk-attr" rx="3"/>
+    <text x="115" y="190" text-anchor="middle" class="text">student_id</text>
+
+    <!-- Composite Primary Key Part 2 -->
+    <rect x="170" y="170" width="100" height="30" class="pk-attr" rx="3"/>
+    <text x="220" y="190" text-anchor="middle" class="text">course_code</text>
+
+    <!-- Dependent attributes -->
+    <rect x="280" y="170" width="100" height="30" class="attr" rx="3"/>
+    <text x="330" y="190" text-anchor="middle" class="text">student_name</text>
+
+    <rect x="390" y="170" width="100" height="30" class="attr" rx="3"/>
+    <text x="440" y="190" text-anchor="middle" class="text">course_title</text>
+
+    <rect x="500" y="170" width="70" height="30" class="attr" rx="3"/>
+    <text x="535" y="190" text-anchor="middle" class="text">grade</text>
+
+    <!-- Partial Dependency 1: student_id → student_name -->
+    <line x1="115" y1="200" x2="115" y2="220" class="line-partial"/>
+    <line x1="115" y1="220" x2="330" y2="220" class="line-partial"/>
+    <path d="M 330 220 L 330 200" class="arrow-partial"/>
+    <text x="222.5" y="215" text-anchor="middle" class="warning">PARTIAL</text>
+
+    <!-- Partial Dependency 2: course_code → course_title -->
+    <line x1="220" y1="200" x2="220" y2="230" class="line-partial"/>
+    <line x1="220" y1="230" x2="440" y2="230" class="line-partial"/>
+    <path d="M 440 230 L 440 200" class="arrow-partial"/>
+    <text x="330" y="225" text-anchor="middle" class="warning">PARTIAL</text>
+
+    <!-- Full Dependency: (student_id, course_code) → grade -->
+    <line x1="167.5" y1="170" x2="167.5" y2="155" class="line-full"/>
+    <line x1="167.5" y1="155" x2="535" y2="155" class="line-full"/>
+    <path d="M 535 155 L 535 170" class="arrow-full"/>
+    <text x="350" y="150" text-anchor="middle" class="success">FULL (needs both keys)</text>
+  </g>
+
+  <!-- Explanation -->
+  <g id="explanation">
+    <rect x="50" y="240" width="700" height="70" style="fill: #fff3e0; stroke: #f57c00; stroke-width: 2;" rx="5"/>
+
+    <text x="70" y="265" class="text" style="font-weight: bold; fill: #e65100;">Why this violates 2NF:</text>
+    <text x="70" y="285" class="label">• <tspan style="fill: #ff9800; font-weight: bold;">student_name</tspan> depends only on <tspan style="fill: #1976d2; font-weight: bold;">student_id</tspan> (not the full composite key)</text>
+    <text x="70" y="302" class="label">• <tspan style="fill: #ff9800; font-weight: bold;">course_title</tspan> depends only on <tspan style="fill: #1976d2; font-weight: bold;">course_code</tspan> (not the full composite key)</text>
+  </g>
+
+  <!-- SOLUTION: Decomposed tables -->
+  <g id="solution">
+    <text x="400" y="340" text-anchor="middle" class="title" style="fill: #2e7d32;">SOLUTION: Decompose into 3 tables (each in 2NF)</text>
+
+    <!-- students table -->
+    <g>
+      <rect x="50" y="360" width="200" height="100" class="relation-box" rx="5"/>
+      <text x="150" y="380" text-anchor="middle" class="title" style="font-size: 14px;">students</text>
+
+      <rect x="65" y="410" width="85" height="25" class="pk-attr" rx="3"/>
+      <text x="107.5" y="427" text-anchor="middle" class="text" style="font-size: 13px;">student_id</text>
+
+      <rect x="155" y="410" width="85" height="25" class="attr" rx="3"/>
+      <text x="197.5" y="427" text-anchor="middle" class="text" style="font-size: 13px;">student_name</text>
+
+      <line x1="107.5" y1="410" x2="107.5" y2="395" class="line"/>
+      <line x1="107.5" y1="395" x2="197.5" y2="395" class="line"/>
+      <path d="M 197.5 395 L 197.5 410" class="arrow"/>
+    </g>
+
+    <!-- courses table -->
+    <g>
+      <rect x="300" y="360" width="200" height="100" class="relation-box" rx="5"/>
+      <text x="400" y="380" text-anchor="middle" class="title" style="font-size: 14px;">courses</text>
+
+      <rect x="315" y="410" width="85" height="25" class="pk-attr" rx="3"/>
+      <text x="357.5" y="427" text-anchor="middle" class="text" style="font-size: 13px;">course_code</text>
+
+      <rect x="405" y="410" width="85" height="25" class="attr" rx="3"/>
+      <text x="447.5" y="427" text-anchor="middle" class="text" style="font-size: 13px;">course_title</text>
+
+      <line x1="357.5" y1="410" x2="357.5" y2="395" class="line"/>
+      <line x1="357.5" y1="395" x2="447.5" y2="395" class="line"/>
+      <path d="M 447.5 395 L 447.5 410" class="arrow"/>
+    </g>
+
+    <!-- enrollments table (cleaned) -->
+    <g>
+      <rect x="550" y="360" width="200" height="100" class="relation-box" rx="5"/>
+      <text x="650" y="380" text-anchor="middle" class="title" style="font-size: 14px;">enrollments</text>
+
+      <rect x="565" y="410" width="55" height="25" class="pk-attr" rx="3"/>
+      <text x="592.5" y="427" text-anchor="middle" class="text" style="font-size: 11px;">stud_id</text>
+
+      <rect x="625" y="410" width="55" height="25" class="pk-attr" rx="3"/>
+      <text x="652.5" y="427" text-anchor="middle" class="text" style="font-size: 11px;">crs_code</text>
+
+      <rect x="685" y="410" width="55" height="25" class="attr" rx="3"/>
+      <text x="712.5" y="427" text-anchor="middle" class="text" style="font-size: 13px;">grade</text>
+
+      <line x1="622.5" y1="410" x2="622.5" y2="395" class="line"/>
+      <line x1="622.5" y1="395" x2="712.5" y2="395" class="line"/>
+      <path d="M 712.5 395 L 712.5 410" class="arrow"/>
+
+      <text x="650" y="455" text-anchor="middle" class="label" style="font-size: 10px;">Composite PK + FKs to students and courses</text>
+    </g>
+  </g>
+
+  <!-- Key Insight -->
+  <text x="400" y="490" text-anchor="middle" class="label" style="font-weight: bold; fill: #1976d2;">
+    Key: In 2NF, every non-key attribute must depend on the ENTIRE primary key
+  </text>
+</svg>

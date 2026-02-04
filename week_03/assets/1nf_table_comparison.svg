@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <defs>
+    <style>
+      .relation-box { fill: #f8f9fa; stroke: #2c3e50; stroke-width: 2; }
+      .pk-attr { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; font-weight: bold; }
+      .attr { fill: #fff; stroke: #607d8b; stroke-width: 1.5; }
+      .violation-attr { fill: #ffebee; stroke: #c62828; stroke-width: 2; }
+      .text { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; fill: #2c3e50; }
+      .title { font-family: 'Segoe UI', Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #2c3e50; }
+      .label { font-size: 12px; fill: #7f8c8d; }
+      .violation-text { font-size: 11px; fill: #c62828; font-style: italic; }
+      .success-text { font-size: 12px; fill: #2e7d32; font-weight: bold; }
+      .table-header { fill: #eceff1; stroke: #607d8b; stroke-width: 1; }
+      .table-cell { fill: #fff; stroke: #cfd8dc; stroke-width: 1; }
+      .cell-text { font-family: 'Courier New', monospace; font-size: 11px; fill: #2c3e50; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="25" text-anchor="middle" class="title" style="font-size: 18px;">First Normal Form (1NF): Atomic Values Only</text>
+
+  <!-- VIOLATION: Before -->
+  <g id="before">
+    <text x="200" y="60" text-anchor="middle" class="title" style="fill: #c62828;">X Violation (Not in 1NF)</text>
+
+    <!-- Table -->
+    <rect x="50" y="75" width="300" height="140" class="relation-box" rx="5"/>
+
+    <!-- Header Row -->
+    <rect x="60" y="85" width="80" height="25" class="table-header" rx="2"/>
+    <text x="100" y="102" text-anchor="middle" class="text" style="font-size: 12px; font-weight: bold;">student_id</text>
+
+    <rect x="145" y="85" width="80" height="25" class="table-header" rx="2"/>
+    <text x="185" y="102" text-anchor="middle" class="text" style="font-size: 12px; font-weight: bold;">name</text>
+
+    <rect x="230" y="85" width="110" height="25" class="table-header" rx="2"/>
+    <text x="285" y="102" text-anchor="middle" class="text" style="font-size: 12px; font-weight: bold;">phone_numbers</text>
+
+    <!-- Data Row 1 -->
+    <rect x="60" y="112" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="100" y="129" text-anchor="middle" class="cell-text">101</text>
+
+    <rect x="145" y="112" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="185" y="129" text-anchor="middle" class="cell-text">Alice</text>
+
+    <rect x="230" y="112" width="110" height="25" class="violation-attr" rx="2"/>
+    <text x="285" y="129" text-anchor="middle" class="cell-text" style="fill: #c62828;">555-1234, 555-5678</text>
+
+    <!-- Data Row 2 -->
+    <rect x="60" y="139" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="100" y="156" text-anchor="middle" class="cell-text">102</text>
+
+    <rect x="145" y="139" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="185" y="156" text-anchor="middle" class="cell-text">Bob</text>
+
+    <rect x="230" y="139" width="110" height="25" class="table-cell" rx="2"/>
+    <text x="285" y="156" text-anchor="middle" class="cell-text">555-9999</text>
+
+    <!-- Problem annotation -->
+    <text x="200" y="230" text-anchor="middle" class="violation-text">! Multi-valued cell (not atomic)</text>
+    <text x="200" y="245" text-anchor="middle" class="violation-text">Cannot query "find 555-1234" efficiently</text>
+  </g>
+
+  <!-- Arrow -->
+  <g>
+    <text x="400" y="175" text-anchor="middle" class="title" style="font-size: 24px; fill: #2e7d32;">→</text>
+  </g>
+
+  <!-- SOLUTION: After -->
+  <g id="after">
+    <text x="600" y="60" text-anchor="middle" class="title" style="fill: #2e7d32;">OK Solution (In 1NF)</text>
+
+    <!-- Table -->
+    <rect x="450" y="75" width="300" height="140" class="relation-box" rx="5"/>
+
+    <!-- Header Row -->
+    <rect x="460" y="85" width="80" height="25" class="table-header" rx="2"/>
+    <text x="500" y="102" text-anchor="middle" class="text" style="font-size: 12px; font-weight: bold;">student_id</text>
+
+    <rect x="545" y="85" width="80" height="25" class="table-header" rx="2"/>
+    <text x="585" y="102" text-anchor="middle" class="text" style="font-size: 12px; font-weight: bold;">name</text>
+
+    <rect x="630" y="85" width="110" height="25" class="table-header" rx="2"/>
+    <text x="685" y="102" text-anchor="middle" class="text" style="font-size: 12px; font-weight: bold;">phone_number</text>
+
+    <!-- Data Row 1 -->
+    <rect x="460" y="112" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="500" y="129" text-anchor="middle" class="cell-text">101</text>
+
+    <rect x="545" y="112" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="585" y="129" text-anchor="middle" class="cell-text">Alice</text>
+
+    <rect x="630" y="112" width="110" height="25" class="attr" rx="2"/>
+    <text x="685" y="129" text-anchor="middle" class="cell-text">555-1234</text>
+
+    <!-- Data Row 2 -->
+    <rect x="460" y="139" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="500" y="146" text-anchor="middle" class="cell-text">101</text>
+
+    <rect x="545" y="139" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="585" y="146" text-anchor="middle" class="cell-text">Alice</text>
+
+    <rect x="630" y="139" width="110" height="25" class="attr" rx="2"/>
+    <text x="685" y="146" text-anchor="middle" class="cell-text">555-5678</text>
+
+    <!-- Data Row 3 -->
+    <rect x="460" y="166" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="500" y="183" text-anchor="middle" class="cell-text">102</text>
+
+    <rect x="545" y="166" width="80" height="25" class="table-cell" rx="2"/>
+    <text x="585" y="183" text-anchor="middle" class="cell-text">Bob</text>
+
+    <rect x="630" y="166" width="110" height="25" class="attr" rx="2"/>
+    <text x="685" y="183" text-anchor="middle" class="cell-text">555-9999</text>
+
+    <!-- Success annotation -->
+    <text x="600" y="230" text-anchor="middle" class="success-text">OK Each cell contains atomic value</text>
+    <text x="600" y="245" text-anchor="middle" class="label">(But creates redundancy → see note below)</text>
+  </g>
+
+  <!-- Better Solution -->
+  <g id="better-solution">
+    <rect x="50" y="270" width="700" height="160" style="fill: #f0f4f8; stroke: #90a4ae; stroke-width: 2; stroke-dasharray: 5,5;" rx="5"/>
+
+    <text x="400" y="295" text-anchor="middle" class="title">Better Solution: Separate Table (Achieves 1NF + Eliminates Redundancy)</text>
+
+    <!-- Students table -->
+    <g>
+      <text x="170" y="320" text-anchor="middle" class="text" style="font-weight: bold;">students</text>
+      <rect x="80" y="330" width="180" height="80" class="relation-box" rx="3"/>
+
+      <!-- student_id -->
+      <rect x="90" y="380" width="75" height="25" class="pk-attr" rx="2"/>
+      <text x="127.5" y="397" text-anchor="middle" class="text" style="font-size: 12px;">student_id</text>
+
+      <!-- name -->
+      <rect x="175" y="380" width="75" height="25" class="attr" rx="2"/>
+      <text x="212.5" y="397" text-anchor="middle" class="text" style="font-size: 12px;">name</text>
+    </g>
+
+    <!-- student_phones table -->
+    <g>
+      <text x="565" y="320" text-anchor="middle" class="text" style="font-weight: bold;">student_phones</text>
+      <rect x="430" y="330" width="270" height="80" class="relation-box" rx="3"/>
+
+      <!-- student_id (FK) -->
+      <rect x="440" y="380" width="80" height="25" class="attr" rx="2"/>
+      <text x="480" y="397" text-anchor="middle" class="text" style="font-size: 11px;">student_id (FK)</text>
+
+      <!-- phone_number -->
+      <rect x="530" y="380" width="90" height="25" class="attr" rx="2"/>
+      <text x="575" y="397" text-anchor="middle" class="text" style="font-size: 12px;">phone_number</text>
+
+      <!-- PK indicator -->
+      <rect x="630" y="380" width="60" height="25" class="pk-attr" rx="2"/>
+      <text x="660" y="397" text-anchor="middle" class="text" style="font-size: 10px;">PK: Both</text>
+    </g>
+
+    <text x="400" y="425" text-anchor="middle" class="label" style="font-style: italic;">
+      This mirrors the ER design from Week 2: multivalued attributes become separate tables
+    </text>
+  </g>
+</svg>

@@ -32,6 +32,36 @@ Poorly normalized data leads to:
 
 > **Analogy:** Think of normalization like **organizing a filing cabinet**. You *could* store a customer's address on every invoice in their folder. But when they move, you'd have to update every single invoice. Instead, you store the address once on a "Customer Info" card, and invoices just reference the customer ID.
 
+### The Data Science Reality: Working with Denormalized Data
+
+*If normalization is so important, why do data scientists constantly work with denormalized data?*
+
+In practice, data scientists frequently receive data as **denormalized flat files** — massive CSV exports, Excel spreadsheets — or **wide, denormalized tables** from data warehouse extracts. In both cases, everything is flattened into a single table. These might come from:
+
+*   **Business analytics tools** (Tableau exports, PowerBI datasets)
+*   **API responses** (customer order history with nested JSON flattened to CSV)
+*   **Legacy system exports** (ERP systems dumping joined data)
+*   **Data warehouses** (intentionally denormalized for reporting speed)
+
+**Example:** A typical e-commerce flat file might look like:
+
+| order_id | order_date | customer_name | customer_email | customer_city | product_name | category | price | quantity |
+|----------|------------|---------------|----------------|---------------|--------------|----------|-------|----------|
+| 1001     | 2024-01-15 | Alice Smith   | alice@ex.com   | Boston        | Laptop       | Electronics | 999 | 1 |
+| 1001     | 2024-01-15 | Alice Smith   | alice@ex.com   | Boston        | Mouse        | Electronics | 25  | 2 |
+| 1002     | 2024-01-16 | Alice Smith   | alice@ex.com   | Boston        | Keyboard     | Electronics | 75  | 1 |
+
+Notice how `customer_name`, `customer_email`, and `customer_city` repeat across rows. If Alice changes her email or moves to a new city, this flat file won't reflect it — it's a **snapshot with baked-in anomalies**.
+
+**Why understanding normalization matters for data scientists:**
+
+1.  **Data Quality Diagnosis:** Recognizing that repeated customer info is a *structural problem*, not just "dirty data"
+2.  **ETL Pipeline Design:** Knowing when to split flat files into multiple tables before loading into a database
+3.  **Collaboration:** Speaking the same language as database engineers ("This violates 3NF because...")
+4.  **Performance Trade-offs:** Understanding *why* a data warehouse denormalizes (read speed) vs. *why* an OLTP system normalizes (write consistency)
+
+> **In the lab exercise**, you'll analyze a real-world flat file, identify the anomalies, and practice the normalization process step-by-step — bridging theory to the messy reality of data science work.
+
 ---
 
 ## 3. Core Concept A: Data Anomalies
@@ -83,14 +113,7 @@ A **Functional Dependency (FD)** exists when one attribute uniquely determines a
 
 ### Visualizing Dependencies
 
-```mermaid
-graph LR
-    A[student_id] --> B[name]
-    A --> C[email]
-    A --> D[address]
-    E[course_code] --> F[title]
-    E --> G[credits]
-```
+![Functional Dependencies Diagram](assets/fd_diagram_example.svg)
 
 ### Why This Matters
 Functional dependencies tell us:
@@ -114,24 +137,13 @@ graph TD
 ### First Normal Form (1NF): Atomicity
 **Rule:** Every cell must contain a single, atomic value. No repeating groups or arrays.
 
-**Violation Example:**
+![First Normal Form - Atomicity](assets/1nf_table_comparison.svg)
 
-| student_id | name  | phone_numbers          |
-| :---       | :---  | :---                   |
-| 101        | Alice | 555-1234, 555-5678     |
-| 102        | Bob   | 555-9999               |
-
-**Problem:** `phone_numbers` contains multiple values. How do you search for "555-1234"?
-
-**Solution:** Create a separate row for each phone, or better, a separate table.
-
-| student_id | name  | phone_number |
-| :---       | :---  | :---         |
-| 101        | Alice | 555-1234     |
-| 101        | Alice | 555-5678     |
-| 102        | Bob   | 555-9999     |
-
-> **Note:** This "separate rows" solution achieves 1NF but introduces redundancy (`name` repeated). The proper fix is a separate `student_phones` table — exactly what we did in Week 2 when mapping multivalued attributes. Normalization formalizes what good ER-to-relational mapping achieves intuitively.
+**Key Points:**
+*   Multi-valued cells (like "555-1234, 555-5678") violate 1NF
+*   The "separate rows" solution achieves 1NF but introduces redundancy
+*   The proper fix is a separate `student_phones` table — exactly what we did in Week 2 when mapping multivalued attributes
+*   Normalization formalizes what good ER-to-relational mapping achieves intuitively
 
 **1NF Checklist:**
 - [ ] All columns have atomic (indivisible) values
@@ -147,39 +159,15 @@ graph TD
 
 *This only applies to tables with **composite primary keys**.*
 
-**Violation Example:** `enrollments` table with `(student_id, course_code)` as PK:
+![Second Normal Form - No Partial Dependencies](assets/2nf_partial_dependencies.svg)
 
-| student_id | course_code | student_name | course_title | grade |
-| :---       | :---        | :---         | :---         | :---  |
-| 101        | MATH101     | Alice        | Calculus I   | A     |
-| 101        | PHYS201     | Alice        | Physics I    | B     |
-| 102        | MATH101     | Bob          | Calculus I   | B+    |
-
-**Functional Dependencies:**
-*   `(student_id, course_code) → grade` ✓ (Full dependency)
-*   `student_id → student_name` ✗ (Partial! Only depends on part of the key)
-*   `course_code → course_title` ✗ (Partial! Only depends on part of the key)
-
-**Solution:** Decompose into three tables:
-
-**students:**
-| student_id | student_name |
-| :---       | :---         |
-| 101        | Alice        |
-| 102        | Bob          |
-
-**courses:**
-| course_code | course_title |
-| :---        | :---         |
-| MATH101     | Calculus I   |
-| PHYS201     | Physics I    |
-
-**enrollments:**
-| student_id | course_code | grade |
-| :---       | :---        | :---  |
-| 101        | MATH101     | A     |
-| 101        | PHYS201     | B     |
-| 102        | MATH101     | B+    |
+**Key Points:**
+*   **Partial dependency** = Non-key attribute depends on only PART of a composite primary key
+*   **Tables with single-attribute PKs automatically satisfy 2NF** (partial dependencies are impossible without composite keys)
+*   In the violation example, `student_name` depends only on `student_id` (not the full composite key)
+*   Similarly, `course_title` depends only on `course_code` (not the full composite key)
+*   Only `grade` depends on the full composite key `(student_id, course_code)`
+*   **Solution:** Decompose into three tables where each non-key attribute depends on the entire PK
 
 **2NF Checklist:**
 - [ ] Table is in 1NF
@@ -193,48 +181,15 @@ graph TD
 
 **Rule:** Non-key attributes must depend **only** on the primary key, not on other non-key attributes.
 
-**Violation Example:** `employees` table:
+![Third Normal Form - No Transitive Dependencies](assets/3nf_transitive_dependencies.svg)
 
-| emp_id | name  | dept_id | dept_name   | dept_building |
-| :---   | :---  | :---    | :---        | :---          |
-| 1      | Alice | D01     | Engineering | Building A    |
-| 2      | Bob   | D01     | Engineering | Building A    |
-| 3      | Carol | D02     | Marketing   | Building B    |
-
-**Functional Dependencies:**
-*   `emp_id → name, dept_id` ✓ (Direct dependency on PK)
-*   `dept_id → dept_name, dept_building` (Non-key → Non-key!)
-*   `emp_id → dept_name` only through `dept_id` (Transitive!)
-
-**The Problem:** `dept_name` and `dept_building` depend on `dept_id`, not directly on `emp_id`. This is a **transitive dependency**.
-
-```mermaid
-graph LR
-    A[emp_id] -->|direct| B[name]
-    A -->|direct| C[dept_id]
-    C -->|transitive| D[dept_name]
-    C -->|transitive| E[dept_building]
-    style C fill:#ffcccc
-    style D fill:#ffcccc
-    style E fill:#ffcccc
-```
-
-*The red nodes show the transitive chain: `emp_id → dept_id → dept_name/dept_building`*
-
-**Solution:** Decompose:
-
-**employees:**
-| emp_id | name  | dept_id |
-| :---   | :---  | :---    |
-| 1      | Alice | D01     |
-| 2      | Bob   | D01     |
-| 3      | Carol | D02     |
-
-**departments:**
-| dept_id | dept_name   | dept_building |
-| :---    | :---        | :---          |
-| D01     | Engineering | Building A    |
-| D02     | Marketing   | Building B    |
+**Key Points:**
+*   **Transitive dependency** = `A → B → C` (attribute C depends on PK indirectly through non-key attribute B)
+*   In the violation example:
+    *   `emp_id → dept_id` ✓ (Direct dependency on PK)
+    *   `dept_id → dept_name, dept_building` ✗ (Non-key → Non-key creates transitive path!)
+    *   Therefore `emp_id → dept_name` is transitive (goes through `dept_id`)
+*   **Solution:** Decompose so each non-key attribute depends ONLY on its table's primary key
 
 **3NF Checklist:**
 - [ ] Table is in 2NF
