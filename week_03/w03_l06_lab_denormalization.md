@@ -20,7 +20,9 @@ Run this block first to set up the environment and create sample data.
 # Setup: Run this cell first (required for Colab)
 # NOTE: Run cells in order. Variables from earlier sections are used later.
 !pip install -q pandas duckdb mermaid-py
+```
 
+```python
 import pandas as pd
 import duckdb
 import time
@@ -517,59 +519,339 @@ The star schema query is simpler and doesn't require extracting date parts on th
 </details>
 
 ### Exercise 2: Add a Time Dimension
-**Task:** Create a `dim_date` table that the fact table can join to for richer date analysis.
+
+> **💡 Why Create a Separate `dim_date` Table?**
+>
+> **Current approach:** We extracted `year` and `month` directly in the fact table (lines 295-296). This works for simple queries.
+>
+> **Production pattern:** Create a separate `dim_date` table because:
+> 1. **Rich attributes**: Month names, quarters, weekends, holidays, fiscal periods
+> 2. **Pre-computed**: Calculate once, not on every query (faster for millions of rows)
+> 3. **Business logic**: Fiscal years, custom calendars, holiday rules
+> 4. **Consistency**: Same date logic across all fact tables in your warehouse
+> 5. **Flexibility**: Add new attributes (e.g., "is_holiday") without touching fact tables
+>
+> **Example benefit:** Instead of complex date math in every query, just:
+> ```sql
+> WHERE dd.is_weekend = FALSE AND dd.is_holiday = FALSE
+> ```
+
+**Task:** Build a `dim_date` dimension table following the industry-standard star schema pattern.
+
+---
+
+#### **Step 2a: Generate All Dates**
+
+> **Why Generate All Dates? Can't we just use dates from the `orders` table?**
+>
+> **Answer:** No! `dim_date` must contain **every date**, not just dates with orders. Here's why:
+>
+> **Problem with using only order dates:**
+> - **Missing dates:** If no orders on 2024-12-25, Christmas won't exist in `dim_date`
+> - **Broken charts:** Revenue reports will have gaps (can't show "$0 on Dec 25")
+> - **Can't analyze absences:** Can't find "which weekends had zero sales?" if those dates don't exist
+> - **Future planning:** Can't show next month's calendar if orders don't exist yet
+>
+> **Think of `dim_date` as a calendar on the wall** - it has every date, whether events happened or not.
+>
+> **Example benefit:**
+> ```sql
+> -- Show daily sales for January 2024 (including days with $0)
+> SELECT dd.full_date, COALESCE(SUM(fs.line_total), 0) as revenue
+> FROM dim_date dd
+> LEFT JOIN fact_sales fs ON dd.date_key = fs.date_key
+> WHERE dd.year = 2024 AND dd.month = 1
+> ```
+> This only works if dim_date has ALL days of January, not just days with orders!
+
+First, we need a table with one row per date. DuckDB provides a `range()` function for this.
 
 ```python
-# TODO: Create dim_date with columns: date_key (YYYYMMDD), full_date, year, month,
-#       month_name, quarter, day_of_week, is_weekend
+# TODO: Create a date series for 2023-2024
+# Hint: DuckDB's range(start_date, end_date, interval) generates a series
 
-# Hint: Generate dates for 2023-2024
+conn.execute("""
+    CREATE TABLE dim_date_basic AS
+    SELECT CAST(range AS DATE) AS full_date
+    FROM range(DATE '2023-01-01', DATE '2025-01-01', INTERVAL 1 DAY)
+""")
+
+# Check what we created
+print("Sample dates:")
+print(conn.execute("SELECT * FROM dim_date_basic LIMIT 5").df())
+print(f"\nTotal dates: {conn.execute('SELECT COUNT(*) FROM dim_date_basic').fetchone()[0]}")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
-~~~python
-# Step 1: Create the dimension table
+~~~text
+Sample dates:
+   full_date
+0 2023-01-01
+1 2023-01-02
+2 2023-01-03
+3 2023-01-04
+4 2023-01-05
+
+Total dates: 730 (2 years of dates)
+~~~
+
+</details>
+
+---
+
+#### **Step 2b: Extract Date Components**
+
+Now let's add useful date attributes. SQL provides two main functions for working with dates:
+
+| Function | Purpose | Example |
+|:---|:---|:---|
+| `EXTRACT(part FROM date)` | Get numeric part of date | `EXTRACT(YEAR FROM '2024-03-15')` → 2024 |
+| `STRFTIME(date, format)` | Format date as string | `STRFTIME('2024-03-15', '%B')` → 'March' |
+
+**Common EXTRACT parts:** `YEAR`, `MONTH`, `DAY`, `QUARTER`, `DAYOFWEEK` (0=Sunday, 6=Saturday)
+
+**Common STRFTIME formats:**
+- `'%Y'` = 4-digit year (2024)
+- `'%m'` = 2-digit month (03)
+- `'%B'` = Full month name (March)
+- `'%Y%m%d'` = YYYYMMDD format (20240315) - common for date keys
+
+```python
+# TODO: Add year, month, and month_name columns
+# Hint: Use EXTRACT for numbers, STRFTIME for text
+
+conn.execute("""
+    CREATE TABLE dim_date_enriched AS
+    SELECT
+        full_date,
+        EXTRACT(YEAR FROM full_date) AS year,
+        EXTRACT(MONTH FROM full_date) AS month,
+        STRFTIME(full_date, '%B') AS month_name
+        -- We'll add more columns in the next step
+    FROM dim_date_basic
+""")
+
+print(conn.execute("SELECT * FROM dim_date_enriched LIMIT 5").df())
+```
+
+<details>
+<summary>Expected Output</summary>
+
+~~~text
+   full_date  year  month month_name
+0 2023-01-01  2023      1    January
+1 2023-01-02  2023      1    January
+2 2023-01-03  2023      1    January
+3 2023-01-04  2023      1    January
+4 2023-01-05  2023      1    January
+~~~
+
+</details>
+
+---
+
+#### **Step 2c: Add Business-Useful Attributes**
+
+Let's add more attributes that analysts commonly need:
+
+```python
+# TODO: Add quarter, day_of_week, and is_weekend
+# Hint: EXTRACT(QUARTER ...), EXTRACT(DAYOFWEEK ...) where 0=Sunday, 6=Saturday
+# Hint: Use CASE WHEN for is_weekend
+
 conn.execute("""
     CREATE TABLE dim_date AS
-    WITH date_series AS (
-        SELECT CAST(range AS DATE) AS full_date
-        FROM range(DATE '2023-01-01', DATE '2025-01-01', INTERVAL 1 DAY)
-    )
     SELECT
-        CAST(STRFTIME(full_date, '%Y%m%d') AS INTEGER) AS date_key,
+        CAST(STRFTIME(full_date, '%Y%m%d') AS INTEGER) AS date_key,  -- e.g., 20240315
         full_date,
         EXTRACT(YEAR FROM full_date) AS year,
         EXTRACT(MONTH FROM full_date) AS month,
         STRFTIME(full_date, '%B') AS month_name,
-        EXTRACT(QUARTER FROM full_date) AS quarter,
-        EXTRACT(DAYOFWEEK FROM full_date) AS day_of_week,
-        CASE WHEN EXTRACT(DAYOFWEEK FROM full_date) IN (0, 6) THEN TRUE ELSE FALSE END AS is_weekend
-    FROM date_series
+        EXTRACT(QUARTER FROM full_date) AS quarter,  -- 1, 2, 3, or 4
+        EXTRACT(DAYOFWEEK FROM full_date) AS day_of_week,  -- 0=Sun, 1=Mon, ..., 6=Sat
+        CASE
+            WHEN EXTRACT(DAYOFWEEK FROM full_date) IN (0, 6) THEN TRUE
+            ELSE FALSE
+        END AS is_weekend
+    FROM dim_date_basic
 """)
 
-print(conn.execute("SELECT * FROM dim_date LIMIT 5").df())
+print("Sample dim_date rows:")
+print(conn.execute("SELECT * FROM dim_date LIMIT 10").df())
+```
 
-# Step 2: Add date_key to fact_sales (in production, you'd design this from the start)
+<details>
+<summary>Expected Output</summary>
+
+~~~text
+Sample dim_date rows:
+   date_key   full_date  year  month month_name  quarter  day_of_week  is_weekend
+0  20230101  2023-01-01  2023      1    January        1            0        True  (Sunday)
+1  20230102  2023-01-02  2023      1    January        1            1       False  (Monday)
+2  20230103  2023-01-03  2023      1    January        1            2       False
+3  20230104  2023-01-04  2023      1    January        1            3       False
+4  20230105  2023-01-05  2023      1    January        1            4       False
+5  20230106  2023-01-06  2023      1    January        1            5       False
+6  20230107  2023-01-07  2023      1    January        1            6        True  (Saturday)
+...
+~~~
+
+</details>
+
+---
+
+#### **Step 2d: Link Fact Table to dim_date**
+
+Now we need to add a `date_key` column to `fact_sales` and populate it.
+
+```python
+# Step 1: Add the column
 conn.execute("""
     ALTER TABLE fact_sales ADD COLUMN date_key INTEGER;
 """)
+
+# Step 2: Populate it by converting order_date to YYYYMMDD format
+# TODO: Update fact_sales to set date_key
+# Hint: Use the same STRFTIME format as in dim_date
+
 conn.execute("""
     UPDATE fact_sales
     SET date_key = CAST(STRFTIME(order_date, '%Y%m%d') AS INTEGER);
 """)
 
-# Now you can join fact_sales to dim_date for rich date analysis!
+print("Updated fact_sales with date_key:")
+print(conn.execute("SELECT sale_id, order_date, date_key FROM fact_sales LIMIT 5").df())
+```
+
+<details>
+<summary>Expected Output</summary>
+
+~~~text
+Updated fact_sales with date_key:
+   sale_id  order_date  date_key
+0        1  2023-05-12  20230512
+1        2  2023-05-12  20230512
+2        3  2023-05-12  20230512
+3        4  2024-01-08  20240108
+4        5  2024-01-08  20240108
+~~~
+
+</details>
+
+---
+
+#### **Step 2e: Query with Rich Date Attributes**
+
+Now we can use all the pre-computed date attributes!
+
+```python
+# Example 1: Revenue by quarter
+print("Revenue by quarter:")
 print(conn.execute("""
-    SELECT dd.month_name, dd.quarter, SUM(fs.line_total) as revenue
+    SELECT
+        dd.year,
+        dd.quarter,
+        SUM(fs.line_total) as revenue
     FROM fact_sales fs
     JOIN dim_date dd ON fs.date_key = dd.date_key
-    GROUP BY dd.month_name, dd.quarter
-    ORDER BY dd.quarter, dd.month_name
-    LIMIT 5
+    GROUP BY dd.year, dd.quarter
+    ORDER BY dd.year, dd.quarter
 """).df())
+
+# Example 2: Weekend vs. weekday sales
+print("\nWeekend vs. Weekday sales:")
+print(conn.execute("""
+    SELECT
+        CASE WHEN dd.is_weekend THEN 'Weekend' ELSE 'Weekday' END as period,
+        COUNT(*) as num_sales,
+        SUM(fs.line_total) as total_revenue
+    FROM fact_sales fs
+    JOIN dim_date dd ON fs.date_key = dd.date_key
+    GROUP BY dd.is_weekend
+""").df())
+```
+
+<details>
+<summary>Expected Output</summary>
+
+~~~text
+Revenue by quarter:
+   year  quarter      revenue
+0  2023        1  XXXXXXXX.XX
+1  2023        2  XXXXXXXX.XX
+2  2023        3  XXXXXXXX.XX
+3  2023        4  XXXXXXXX.XX
+4  2024        1  XXXXXXXX.XX
+5  2024        2  XXXXXXXX.XX
+6  2024        3  XXXXXXXX.XX
+7  2024        4  XXXXXXXX.XX
+
+Weekend vs. Weekday sales:
+    period  num_sales  total_revenue
+0  Weekday      ~XXXX    XXXXXXXX.XX
+1  Weekend      ~XXXX    XXXXXXXX.XX
 ~~~
+
+</details>
+
+---
+
+#### **🎯 Key Takeaway**
+
+With `dim_date`, you now have:
+- ✅ Pre-computed date attributes (no `EXTRACT()` in every query)
+- ✅ Business-friendly names (`month_name` instead of numbers)
+- ✅ Complex date logic (weekends, quarters) in simple WHERE clauses
+- ✅ Consistent date handling across all fact tables
+
+**Industry Standard:** Every data warehouse has a `dim_date` table. You've just built one!
+
+---
+
+#### **Optional Challenge: Add Fiscal Year**
+
+Many companies have fiscal years that don't match calendar years (e.g., fiscal year starts April 1).
+
+```python
+# TODO: Add a fiscal_year column where fiscal year starts on July 1
+# Hint: If month >= 7, fiscal_year = calendar_year + 1, else fiscal_year = calendar_year
+
+# Example solution:
+conn.execute("""
+    ALTER TABLE dim_date ADD COLUMN fiscal_year INTEGER;
+""")
+conn.execute("""
+    UPDATE dim_date
+    SET fiscal_year = CASE
+        WHEN month >= 7 THEN year + 1
+        ELSE year
+    END;
+""")
+
+print(conn.execute("""
+    SELECT full_date, year, month, fiscal_year
+    FROM dim_date
+    WHERE month IN (6, 7)
+    LIMIT 6
+""").df())
+```
+
+<details>
+<summary>Expected Output</summary>
+
+~~~text
+   full_date  year  month  fiscal_year
+0 2023-06-29  2023      6         2023  (still FY 2023)
+1 2023-06-30  2023      6         2023
+2 2023-07-01  2023      7         2024  (FY 2024 starts!)
+3 2023-07-02  2023      7         2024
+4 2024-06-29  2024      6         2024
+5 2024-06-30  2024      6         2024
+~~~
+
+Shows the fiscal year transition on July 1.
 
 </details>
 
@@ -609,5 +891,3 @@ You have successfully:
 **Key Takeaway:** Neither approach is universally better. Match your schema design to your workload:
 *   **OLTP (transactional):** Normalize for integrity
 *   **OLAP (analytical):** Denormalize for speed
-
-In Week 4, we'll move to SQL implementation where you'll write `CREATE TABLE` statements to build these schemas in PostgreSQL.

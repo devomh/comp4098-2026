@@ -67,6 +67,7 @@ By the end of this lesson, you will be able to:
 - Contrast **Write Performance** (favors normalization) vs. **Read Performance** (may favor denormalization)
 - Identify scenarios where **controlled denormalization** is the correct choice
 - Apply trade-off analysis to Data Science workflow decisions
+- Understand the **pipeline paradigm** for maintaining multiple denormalized views
 
 ### Materials
 
@@ -85,10 +86,19 @@ Click the badge above to open the lab notebook directly in Google Colab.
 ---
 
 ## Key Concepts
+
+### Normalization (Lesson 05)
 - **Data Anomalies:** Update, Delete, and Insert anomalies
 - **Functional Dependencies:** Determinants and dependent attributes
 - **Normal Forms:** 1NF (Atomicity), 2NF (No Partial Dependencies), 3NF (No Transitive Dependencies)
+
+### Denormalization & Analytics (Lesson 06)
 - **Denormalization:** Controlled redundancy for read performance
 - **OLTP vs. OLAP:** Workload-driven design decisions
+- **Data Warehouse:** Centralized repository for analytical queries
 - **Star Schema:** Fact tables and dimension tables for analytics
+  - **Fact Tables:** Grain, measure types (additive, semi-additive, non-additive)
+  - **Dimension Tables:** Denormalized reference data (customers, products, dates)
 - **Materialized Views:** Database-managed denormalized tables
+- **Pipeline Paradigm:** Automated workflows (dbt, Airflow, Dagster) for maintaining denormalized views
+- **dim_date Pattern:** Complete calendar dimension for time-based analysis

@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500">
+  <!-- Title -->
+  <text x="450" y="35" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#333">
+    CRUD Operation Safety Levels
+  </text>
+
+  <!-- INSERT - Low Risk (Green) -->
+  <rect x="50" y="80" width="180" height="350" rx="10" fill="#E8F5E9" stroke="#4CAF50" stroke-width="3"/>
+  <text x="140" y="110" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#2E7D32">
+    INSERT
+  </text>
+  <circle cx="140" cy="160" r="40" fill="#4CAF50"/>
+  <text x="140" y="175" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="white">
+    +
+  </text>
+  <text x="140" y="230" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#2E7D32">
+    🟢 Low Risk
+  </text>
+  <text x="140" y="260" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Adds new data
+  </text>
+  <text x="140" y="280" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Won't overwrite
+  </text>
+  <text x="140" y="300" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    existing records
+  </text>
+
+  <!-- Best Practice -->
+  <rect x="60" y="320" width="160" height="100" rx="5" fill="#C8E6C9" stroke="#4CAF50" stroke-width="2"/>
+  <text x="140" y="340" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#1B5E20">
+    Best Practice:
+  </text>
+  <text x="140" y="360" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Use constraints
+  </text>
+  <text x="140" y="378" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Check for duplicates
+  </text>
+  <text x="140" y="396" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Use transactions
+  </text>
+
+  <!-- SELECT - No Risk (Blue) -->
+  <rect x="260" y="80" width="180" height="350" rx="10" fill="#E3F2FD" stroke="#2196F3" stroke-width="3"/>
+  <text x="350" y="110" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#1565C0">
+    SELECT
+  </text>
+  <circle cx="350" cy="160" r="40" fill="#2196F3"/>
+  <text x="350" y="175" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="white">
+    ?
+  </text>
+  <text x="350" y="230" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#1565C0">
+    🔵 No Risk
+  </text>
+  <text x="350" y="260" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Read-only
+  </text>
+  <text x="350" y="280" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Cannot modify
+  </text>
+  <text x="350" y="300" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    or delete data
+  </text>
+
+  <!-- Best Practice -->
+  <rect x="270" y="320" width="160" height="100" rx="5" fill="#BBDEFB" stroke="#2196F3" stroke-width="2"/>
+  <text x="350" y="340" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#0D47A1">
+    Best Practice:
+  </text>
+  <text x="350" y="360" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Test queries
+  </text>
+  <text x="350" y="378" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Use EXPLAIN
+  </text>
+  <text x="350" y="396" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Avoid SELECT *
+  </text>
+
+  <!-- UPDATE - High Risk (Orange) -->
+  <rect x="470" y="80" width="180" height="350" rx="10" fill="#FFF3E0" stroke="#FF9800" stroke-width="3"/>
+  <text x="560" y="110" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#E65100">
+    UPDATE
+  </text>
+  <circle cx="560" cy="160" r="40" fill="#FF9800"/>
+  <text x="560" y="175" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="white">
+    ✎
+  </text>
+  <text x="560" y="230" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#E65100">
+    🟠 HIGH Risk
+  </text>
+  <text x="560" y="260" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Overwrites data
+  </text>
+  <text x="560" y="280" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Without WHERE
+  </text>
+  <text x="560" y="300" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    affects ALL rows
+  </text>
+
+  <!-- Best Practice -->
+  <rect x="480" y="320" width="160" height="100" rx="5" fill="#FFE0B2" stroke="#FF9800" stroke-width="2"/>
+  <text x="560" y="340" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#BF360C">
+    Best Practice:
+  </text>
+  <text x="560" y="360" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • ALWAYS use WHERE
+  </text>
+  <text x="560" y="378" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • SELECT first
+  </text>
+  <text x="560" y="396" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Use transactions
+  </text>
+
+  <!-- DELETE - Very High Risk (Red) -->
+  <rect x="680" y="80" width="180" height="350" rx="10" fill="#FFEBEE" stroke="#F44336" stroke-width="3"/>
+  <text x="770" y="110" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#B71C1C">
+    DELETE
+  </text>
+  <circle cx="770" cy="160" r="40" fill="#F44336"/>
+  <text x="770" y="175" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="white">
+    ✖
+  </text>
+  <text x="770" y="230" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#B71C1C">
+    🔴 VERY HIGH
+  </text>
+  <text x="770" y="260" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Removes data
+  </text>
+  <text x="770" y="280" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    Without WHERE
+  </text>
+  <text x="770" y="300" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#333">
+    deletes ALL rows
+  </text>
+
+  <!-- Best Practice -->
+  <rect x="690" y="320" width="160" height="100" rx="5" fill="#FFCDD2" stroke="#F44336" stroke-width="2"/>
+  <text x="770" y="340" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#B71C1C">
+    Best Practice:
+  </text>
+  <text x="770" y="360" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • ALWAYS use WHERE
+  </text>
+  <text x="770" y="378" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • SELECT first
+  </text>
+  <text x="770" y="396" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#333">
+    • Use transactions
+  </text>
+
+  <!-- Footer note -->
+  <text x="450" y="470" font-family="Arial, sans-serif" font-size="14" font-style="italic" text-anchor="middle" fill="#666">
+    ⚠️ Rule: Never run UPDATE or DELETE without WHERE clause!
+  </text>
+</svg>
