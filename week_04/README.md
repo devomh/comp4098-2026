@@ -28,7 +28,7 @@ By the end of this week, you'll have implemented a complete, production-ready Un
 
 ### Interactive Notebook
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/USERNAME/comp4098-2026/blob/main/week_04/w04_l07_lab_ddl_implementation.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_04/w04_l07_lab_ddl_implementation.ipynb)
 
 *Note: Replace `USERNAME` with your GitHub username once the repository is set up.*
 
@@ -54,7 +54,7 @@ By the end of this week, you'll have implemented a complete, production-ready Un
 
 ### Interactive Notebook
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/USERNAME/comp4098-2026/blob/main/week_04/w04_l08_lab_dml_operations.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_04/w04_l08_lab_dml_operations.ipynb)
 
 *Note: Replace `USERNAME` with your GitHub username once the repository is set up.*
 
