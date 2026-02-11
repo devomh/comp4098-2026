@@ -28,57 +28,40 @@ In this lab, you'll implement the **University Course Registration System** that
 Run this setup block first to install required packages and configure SQL Magic.
 
 ```python
-# Install required packages
-!pip install -q psycopg2-binary ipython-sql sqlalchemy pandas mermaid-py
+# 1. Install jupysql, the postgres driver, and visualization tools
+!pip install -q jupysql psycopg2-binary mermaid-py
+```
 
+```python
+# 2. Standard Postgres installation
+!sudo apt-get -y -qq update > /dev/null
+!sudo apt-get -y -qq install postgresql postgresql-contrib > /dev/null
+!service postgresql start
+```
+
+```python
+# 3. Setup the database
+!sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+!sudo -u postgres psql -c "CREATE DATABASE my_database;"
+```
+
+```python
 # Import libraries
 import pandas as pd
 from mermaid import Mermaid
 import warnings
 warnings.filterwarnings('ignore')
 
-# Load SQL magic
+# Load SQL magic and connect
 %load_ext sql
-
-# Configure SQL Magic
+%config SqlMagic.feedback = False
 %config SqlMagic.autocommit = False  # Require explicit COMMIT for safety
-%config SqlMagic.feedback = True     # Show row counts
 %config SqlMagic.displaycon = False  # Hide connection string in output
+%sql postgresql://postgres:postgres@localhost:5432/my_database
 ```
 
-### Database Connection Options
+> **Note on `autocommit = False`:** Each `%%sql` cell runs inside a transaction. If any statement in a multi-statement cell fails, the **entire cell's transaction is rolled back** — including any DDL (`CREATE TABLE`) that ran before the failing line. Keep DDL and verification `SELECT`s in the same cell only when you're confident both will succeed, or split them into separate cells.
 
-You need a PostgreSQL database to complete this lab. Choose one of the following options:
-
-**Option 1: Supabase (Recommended for Students)**
-- Free tier: 500MB database, unlimited API calls
-- Sign up at: https://supabase.com
-- Create a new project
-- Go to Settings → Database → Connection String
-- Copy the URI connection string
-
-```python
-# Replace with your Supabase credentials
-%sql postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT].supabase.co:5432/postgres
-```
-
-**Option 2: ElephantSQL (Alternative)**
-- Free tier: 20MB database
-- Sign up at: https://www.elephantsql.com
-- Create a new instance
-- Copy the URL
-
-```python
-# Replace with your ElephantSQL URL
-%sql postgresql://user:pass@host/database
-```
-
-**Option 3: Local PostgreSQL (Advanced)**
-- If you have PostgreSQL installed locally:
-
-```python
-%sql postgresql://postgres:password@localhost:5432/comp4098
-```
 
 **Test Your Connection:**
 
@@ -386,6 +369,15 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
 - `ON DELETE CASCADE` for student: If student is deleted, remove their enrollments
 - `ON DELETE RESTRICT` for course: Can't delete a course if students are enrolled
 
+### Commit the Schema
+
+All tables are now created. With `autocommit = False`, the DDL is still inside an open transaction — commit it to make the schema permanent.
+
+```python
+%%sql
+COMMIT;
+```
+
 ---
 
 ## Step 5: Test Constraint Enforcement
@@ -408,12 +400,20 @@ null value in column "email" violates not-null constraint
 
 ### Test 2: UNIQUE Violation
 
+First, insert a valid student:
+
 ```python
 %%sql
--- Insert a valid student first
 INSERT INTO students (name, email, dob)
 VALUES ('Alice Smith', 'alice@university.edu', '2000-05-15');
 
+COMMIT;
+```
+
+Now try to insert a second student with the same email — this should fail:
+
+```python
+%%sql
 -- This should fail because email must be unique
 INSERT INTO students (name, email, dob)
 VALUES ('Bob Jones', 'alice@university.edu', '1999-08-22');
@@ -424,16 +424,15 @@ You should see an error like:
 duplicate key value violates unique constraint "students_email_key"
 ```
 
-**Fix it:** Roll back and insert with a unique email
+**Fix it:** Insert Bob with a unique email
 
 ```python
 %%sql
-ROLLBACK;  -- Undo the failed transaction
+-- Insert with a unique email
+INSERT INTO students (name, email, dob)
+VALUES ('Bob Jones', 'bob@university.edu', '1999-08-22');
 
--- Now insert both students correctly
-INSERT INTO students (name, email, dob) VALUES
-    ('Alice Smith', 'alice@university.edu', '2000-05-15'),
-    ('Bob Jones', 'bob@university.edu', '1999-08-22');
+COMMIT;
 ```
 
 ### Test 3: CHECK Constraint Violation
@@ -563,11 +562,12 @@ Since the column is NOT NULL and the table might have existing rows, you may nee
 -- Option 1: Add with default value (if professors table has data)
 ALTER TABLE professors
 ADD COLUMN salary NUMERIC(10, 2) NOT NULL DEFAULT 50000
-CHECK (salary > 30000);
+CONSTRAINT salary_check CHECK (salary > 30000);
 
 -- Option 2: Add without default (only if table is empty)
 ALTER TABLE professors
-ADD COLUMN salary NUMERIC(10, 2) NOT NULL CHECK (salary > 30000);
+ADD COLUMN salary NUMERIC(10, 2) NOT NULL
+CONSTRAINT salary_check CHECK (salary > 30000);
 ~~~
 
 </details>
@@ -656,6 +656,10 @@ ADD CONSTRAINT unique_course_section UNIQUE (course_code, section);
 ALTER TABLE enrollments DROP COLUMN section;
 ~~~
 
+> **Note on NULLs and UNIQUE constraints:** Since `section` is nullable, PostgreSQL treats each NULL as distinct from all others. This means multiple rows with the same `course_code` and `section = NULL` would all pass the UNIQUE constraint. If you want to prevent that, declare the column `NOT NULL` or use a partial index.
+
+
+
 </details>
 
 ---
@@ -690,13 +694,13 @@ erDiagram
         date dob
     }
     student_phones {
-        integer student_id PK_FK
+        integer student_id PK,FK
         varchar phone_number PK
         varchar phone_type
     }
     enrollments {
-        integer student_id PK_FK
-        char course_code PK_FK
+        integer student_id PK,FK
+        char course_code PK,FK
         date enrollment_date
         char grade
     }
@@ -709,13 +713,119 @@ erDiagram
 """)
 ```
 
-**Legend:**
-- **PK:** Primary Key
-- **FK:** Foreign Key
-- **UK:** Unique Key
-- **||--|{:** One-to-many relationship
-- **||--o{:** One-to-zero-or-many relationship
-- **||--o|:** One-to-zero-or-one relationship (self-referencing)
+---
+
+## Bonus: Exploring Your Schema with psql
+
+> **Optional.** The exercises above used SQL Magic inside the notebook. Here you'll use **psql**, PostgreSQL's native command-line client, directly from the Colab terminal. This is how database administrators and developers interact with PostgreSQL in real-world environments.
+
+### What is psql?
+
+`psql` is the official interactive terminal for PostgreSQL. It ships with every PostgreSQL installation and lets you run SQL statements, inspect database objects, manage users, and script administrative tasks — all without leaving the command line.
+
+Unlike SQL Magic (which is a Jupyter-specific wrapper), psql is a **universal tool** that works the same way on a laptop, a server, or a cloud VM.
+
+### Opening a Terminal in Colab
+
+In Google Colab, use the **Colab terminal tab** (the `>_` icon) and type:
+
+```
+sudo -u postgres psql -d my_database
+```
+
+You should see the psql prompt:
+
+```
+psql (14.x)
+Type "help" for help.
+
+my_database=#
+```
+
+---
+
+### psql Cheatsheet
+
+Once inside psql, everything that starts with `\` is a **meta-command** (psql-specific, no semicolon needed). Everything else is standard SQL (terminated with `;`).
+
+#### Navigation
+
+| Command | Description |
+|---|---|
+| `\l` | List all databases |
+| `\c dbname` | Switch to a different database |
+| `\dn` | List schemas |
+| `\dt` | List tables in the current schema |
+| `\dt schema.*` | List tables in a specific schema |
+| `\dv` | List views |
+| `\di` | List indexes |
+| `\df` | List functions |
+
+#### Inspecting Objects
+
+| Command | Description |
+|---|---|
+| `\d tablename` | Describe a table (columns + constraints) |
+| `\d+ tablename` | Verbose describe (includes storage details) |
+| `\du` | List users and roles |
+| `\dp tablename` | Show table permissions |
+
+#### Try it on your schema
+
+```sql
+-- List all tables you created
+\dt
+
+-- Describe the enrollments table
+\d enrollments
+
+-- Describe the courses table (notice the self-referencing FK)
+\d courses
+
+-- Run a regular SQL query
+SELECT * FROM departments;
+```
+
+#### Output & Formatting
+
+| Command | Description |
+|---|---|
+| `\x` | Toggle expanded (vertical) output — great for wide tables |
+| `\timing` | Toggle query execution time display |
+| `\pset null 'NULL'` | Show NULL values explicitly instead of blank |
+| `\o filename` | Redirect output to a file |
+| `\o` | Stop redirecting output |
+
+#### Running SQL Files
+
+| Command | Description |
+|---|---|
+| `\i filename.sql` | Execute a `.sql` file |
+| `\e` | Open the last query in a text editor |
+| `\g` | Re-run the last query |
+
+#### Exiting
+
+| Command | Description |
+|---|---|
+| `\q` | Quit psql |
+
+---
+
+### psql vs SQL Magic — Pros and Cons
+
+| | **psql** | **SQL Magic (`%%sql`)** |
+|---|---|---|
+| **Where it runs** | Terminal / command line | Jupyter notebook cell |
+| **Output format** | Plain text tables | Rendered HTML table |
+| **Schema inspection** | Rich meta-commands (`\d`, `\dt`, `\du`) | Must query `information_schema` manually |
+| **Scripting** | Easy — pipe files, use shell variables | Limited |
+| **Visualization** | None built-in | Results integrate with pandas / matplotlib |
+| **Portability** | Works on any machine with PostgreSQL | Requires JupyterSQL / jupysql installed |
+| **Learning curve** | Low — standard tool, same everywhere | Requires knowledge of magic syntax |
+| **Best for** | Administration, debugging, production work | Teaching, exploration, mixing SQL with Python |
+
+**Bottom line:** SQL Magic is convenient for this course because results render nicely alongside your Python code. psql is the tool you'll reach for in professional settings — knowing both is an asset.
 
 ---
 
@@ -723,7 +833,7 @@ erDiagram
 
 Congratulations! In this lab, you have successfully:
 
-1. ✅ Connected to a PostgreSQL database from Google Colab
+1. ✅ Connected to a PostgreSQL database from a Jupyter notebook
 2. ✅ Implemented a complete normalized schema with DDL statements
 3. ✅ Created tables in the correct dependency order (parents before children)
 4. ✅ Applied all constraint types:
@@ -744,10 +854,6 @@ Congratulations! In this lab, you have successfully:
 - **ALTER TABLE is powerful but dangerous** - Always back up before schema changes
 - **Documentation is critical** - Use information_schema to understand existing databases
 
-**Next Steps:**
-
-In [Lesson 8: DML & Basic Querying](w04_l08_concept_dml_querying.md), you'll learn how to populate this schema with data using INSERT, UPDATE, DELETE, and SELECT statements.
-
 ---
 
 ## Troubleshooting
@@ -757,7 +863,7 @@ In [Lesson 8: DML & Basic Querying](w04_l08_concept_dml_querying.md), you'll lea
 **Problem:** Can't connect to PostgreSQL
 - **Solution:** Double-check your connection string format
 - **Solution:** Verify your password doesn't contain special characters (or URL-encode them)
-- **Solution:** Check if your IP is whitelisted (Supabase requires this in free tier)
+- **Solution:** Ensure the PostgreSQL service is running (`!service postgresql status`)
 
 ### Constraint Violations
 
