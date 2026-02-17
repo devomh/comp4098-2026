@@ -22,6 +22,8 @@ By the end of this lesson, you will be able to:
 
 In Lesson 7, you built the **structure** of your database with DDL (CREATE TABLE, constraints). Now you'll learn to **populate and manipulate** that structure with DML.
 
+> **SQL Standard:** SQL is defined by ANSI/ISO standards (currently SQL:2023). These specifications establish the core language that all compliant databases must support. Individual vendors — PostgreSQL, MySQL, SQL Server, Oracle — implement the standard and then add their own **extensions** on top. When you see a feature labelled as a "PostgreSQL extension", it means that feature is not in the standard and will not work as-is on other databases.
+
 **DML (Data Manipulation Language)** consists of four fundamental operations, collectively known as **CRUD**:
 
 - **C**reate → `INSERT` - Add new data
@@ -505,7 +507,9 @@ Now you must explicitly COMMIT or ROLLBACK.
 
 ---
 
-## Deep Dive: RETURNING Clause (PostgreSQL Extension)
+## Deep Dives (Optional)
+
+### A. RETURNING Clause (PostgreSQL Extension)
 
 <details>
 <summary><strong>PostgreSQL's RETURNING Clause</strong></summary>
@@ -566,35 +570,136 @@ Single query, no race conditions, faster.
 
 </details>
 
----
+### B. Transaction Error Handling Patterns
 
+<details>
+<summary><strong>Handling Errors and Automating ROLLBACK</strong></summary>
+
+Standard SQL has no built-in exception handling — the decision of when to rollback is the responsibility of the application layer or a procedural SQL extension. The patterns differ depending on where the logic lives.
+
+### Application Layer (Most Common)
+
+The application catches the database error and issues the rollback explicitly:
+
+```python
+try:
+    conn.execute("BEGIN")
+    conn.execute("UPDATE students SET email = 'new@email.com' WHERE student_id = 1")
+    conn.execute("INSERT INTO audit_log (action) VALUES ('email updated')")
+    conn.commit()
+except Exception as e:
+    conn.rollback()   # undo all changes if anything failed
+    raise
+```
+
+Most database drivers also support context managers that handle this automatically:
+
+```python
+with conn.transaction():   # auto-commits on success, auto-rollbacks on exception
+    conn.execute("UPDATE students SET email = 'new@email.com' WHERE student_id = 1")
+    conn.execute("INSERT INTO audit_log (action) VALUES ('email updated')")
+```
+
+### Server-Side: Stored Procedures (PL/pgSQL)
+
+PostgreSQL's procedural language adds `EXCEPTION` blocks directly in SQL:
+
+```sql
+DO $$
+BEGIN
+    UPDATE students SET email = 'new@email.com' WHERE student_id = 1;
+    INSERT INTO audit_log (action) VALUES ('email updated');
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;  -- re-raise the error to the caller
+END;
+$$;
+```
+
+T-SQL (SQL Server) uses a `TRY/CATCH` structure:
+
+```sql
+BEGIN TRANSACTION
+BEGIN TRY
+    UPDATE students SET email = 'new@email.com' WHERE student_id = 1;
+    INSERT INTO audit_log (action) VALUES ('email updated');
+    COMMIT;
+END TRY
+BEGIN CATCH
+    ROLLBACK;
+    THROW;  -- propagate the error
+END CATCH
+```
+
+### Savepoints: Partial Rollbacks
+
+A `SAVEPOINT` marks a point within a transaction you can roll back to without discarding the entire transaction:
+
+```sql
+BEGIN;
+  UPDATE students SET email = 'new@email.com' WHERE student_id = 1;
+
+  SAVEPOINT before_audit;
+
+  INSERT INTO audit_log (action) VALUES ('email updated');
+  -- if this fails:
+  ROLLBACK TO before_audit;  -- undoes only the INSERT, not the UPDATE
+
+COMMIT;
+```
+
+**Use case:** A multi-step batch where some steps are optional — you want the critical updates to persist even if secondary operations (logging, notifications) fail.
+
+### When Does a Transaction Auto-Rollback?
+
+The database will automatically abort a transaction (requiring an explicit `ROLLBACK` before any new statements) if a statement produces a hard error:
+
+```sql
+BEGIN;
+  UPDATE students SET email = 'new@email.com' WHERE student_id = 1;
+  INSERT INTO students (student_id) VALUES (1);  -- ERROR: duplicate key
+  -- Transaction is now in an aborted state
+  -- Any further statements will fail until ROLLBACK is issued
+ROLLBACK;
+```
+
+In PostgreSQL, a transaction that hits an error is **dead** — you cannot continue it, only roll it back. This is different from some other databases (e.g. SQL Server) where you can sometimes catch the error and continue.
+
+### Summary: Where Each Layer Handles Errors
+
+| Layer | Mechanism | Control |
+|---|---|---|
+| **Application code** | `try/except`, context managers | Most common pattern |
+| **PL/pgSQL (PostgreSQL)** | `EXCEPTION WHEN` blocks | Server-side logic |
+| **T-SQL (SQL Server)** | `TRY/CATCH` | Server-side logic |
+| **Savepoints** | `SAVEPOINT` / `ROLLBACK TO` | Partial rollback within a transaction |
+| **Database engine** | Auto-abort on hard errors | Forces ROLLBACK before continuing |
+
+**Key principle:** The database guarantees atomicity — if a rollback happens, it is always complete for that transaction. The *decision* of when to rollback, however, belongs to the application or procedure.
+
+</details>
+
+---
 ## FAQ / Industry Reality
 
-### Q: "Why not just use Pandas for all data manipulation?"
+### Q: "Why not just use Pandas to update data in the database?"
 
-**A:** SQL is executed **server-side**, while Pandas runs **client-side**:
+**A:** Pandas is a read/analysis tool — it has no native mechanism for writing `INSERT`, `UPDATE`, or `DELETE` operations back to a database. When you modify a DataFrame, you are changing an **in-memory copy** of the data; the source database is untouched. To persist changes you must go through SQLAlchemy (or a similar library), which means you are ultimately executing SQL anyway.
 
-| Feature | SQL (PostgreSQL) | Pandas |
-|---------|------------------|--------|
-| **Execution** | Server-side | Client-side |
-| **Data Transfer** | Only results | Entire dataset |
-| **Concurrency** | Multi-user safe (ACID) | Single-user |
-| **Scale** | Billions of rows | Millions of rows (memory-limited) |
-| **Transaction Safety** | BEGIN/COMMIT/ROLLBACK | No built-in transactions |
+More critically, Pandas has **no concept of transactions**. If you write a multi-step data update in Pandas and something fails halfway through, there is no rollback — your data is left in a partially modified state with no automatic recovery path.
 
-**When to use SQL:**
-- Loading data into production databases
-- Multi-user systems (web applications, dashboards)
-- Data larger than RAM
-- Operations requiring atomic transactions
+PostgreSQL, by contrast, provides full transaction safety:
 
-**When to use Pandas:**
-- Exploratory data analysis
-- Complex transformations not easily expressed in SQL
-- Machine learning preprocessing
-- Data visualization pipelines
+| Capability | PostgreSQL | Pandas |
+|------------|------------|--------|
+| **INSERT / UPDATE / DELETE** | Native DML statements | Not supported — requires SQLAlchemy |
+| **Atomicity** | `BEGIN` / `COMMIT` — all-or-nothing | None |
+| **Rollback on failure** | `ROLLBACK` undoes all changes in the transaction | None — partial writes persist |
+| **Concurrent writes** | ACID-compliant, multi-user safe | Single-user, in-memory only |
+| **Audit / recovery** | WAL (Write-Ahead Log) ensures durability | No persistence guarantees |
 
-**Best practice:** Use SQL for data extraction and manipulation, Pandas for analysis and visualization.
+**Rule of thumb:** Use PostgreSQL DML for any operation that **writes or modifies** data. Use Pandas downstream for analysis and visualization once the data has been correctly persisted.
 
 ### Q: "How do I undo a DELETE I just ran?"
 
@@ -662,8 +767,6 @@ In this lesson, you mastered the four CRUD operations:
 4. 💾 **Test on non-production data first**
 
 **Next:** In [Lesson 8 Lab](w04_l08_lab_dml_operations.md), you'll populate the University Course Registration database you created in Lesson 7 and practice all CRUD operations.
-
-**Looking Ahead:** Week 05 introduces **analytical SQL** - aggregations, JOINs, window functions, and the transition from OLTP (PostgreSQL) to OLAP (DuckDB).
 
 ---
 

@@ -140,25 +140,6 @@ Insights & Models
 
 ---
 
-## Visual Aids
-
-### Constraint Enforcement Flow
-![Constraint Enforcement Flow](assets/constraint_enforcement_flow.svg)
-
-*How PostgreSQL validates each INSERT/UPDATE operation through multiple constraint checks.*
-
-### CRUD Operation Safety Levels
-![CRUD Safety Levels](assets/crud_safety_levels.svg)
-
-*Visual comparison of risk levels for each CRUD operation with best practices.*
-
-### UPDATE Without WHERE Warning
-![DML Update Warning](assets/dml_update_warning.svg)
-
-*Critical warning about the dangers of UPDATE/DELETE without WHERE clauses.*
-
----
-
 ## Additional Resources
 
 ### Textbooks
@@ -194,23 +175,6 @@ All labs use the following Python packages (installed automatically in notebooks
 - `sqlalchemy` - Database toolkit
 - `pandas` - Data analysis
 - `mermaid-py` - Diagram generation
-
-### Estimated Time
-- **Lesson 7:** 45 min concept + 60 min lab = 105 minutes
-- **Lesson 8:** 45 min concept + 60 min lab = 105 minutes
-- **Total:** ~3.5 hours (can be split across multiple sessions)
-
----
-
-## What's Next?
-
-### Week 05: Analytical SQL & Architecture
-- Transition from OLTP (PostgreSQL) to OLAP (DuckDB)
-- Learn row-oriented vs column-oriented storage
-- Master complex JOINs, aggregations, and analytical functions
-- Understand when to use each database type
-
-**Preview:** You'll extract data from your Week 04 PostgreSQL database and analyze it in DuckDB using window functions, CTEs, and aggregations to answer complex analytical questions.
 
 ---
 

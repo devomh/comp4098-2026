@@ -55,6 +55,10 @@ Contrast this concept with another (e.g., OLTP vs. OLAP).
 ## 5. Deep Dive: [Advanced Topic] (Optional)
 *Use this section for mathematical foundations, proofs, edge cases, or historical context. Mark clearly as optional reading.*
 
+*Structure rules:*
+- *One deep dive → keep this `##` heading as-is, place the `<details>` block directly below.*
+- *Multiple deep dives → rename to `## Deep Dives (Optional)` and use `### A.`, `### B.` sub-headings, each with its own `<details>` block.*
+
 <details>
 <summary>Click to expand: [Topic Name]</summary>
 

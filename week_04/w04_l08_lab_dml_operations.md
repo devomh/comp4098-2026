@@ -25,39 +25,64 @@ In this lab, you'll populate the University Course Registration database with re
 
 ## Environment Setup
 
-If you're continuing from Lesson 7, you already have the schema created. If not, re-run the Lesson 7 lab first.
+Each Google Colab session starts with a clean virtual machine — packages and the PostgreSQL service must be reinstalled every time. Run all four cells below before anything else.
 
 ```python
-# Install required packages (if not already installed)
-!pip install -q psycopg2-binary ipython-sql sqlalchemy pandas
+# 1. Install Python packages
+!pip install -q jupysql psycopg2-binary sqlalchemy pandas duckdb
+```
 
-# Import libraries
+```python
+# 2. Install and start PostgreSQL (Colab/Linux)
+!sudo apt-get -y -qq install postgresql postgresql-contrib > /dev/null
+!service postgresql start
+```
+
+```python
+# 3. Create the database and set credentials
+!sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+!sudo -u postgres psql -c "CREATE DATABASE my_database;"
+```
+
+```python
+# 4. Import libraries and connect
 import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
-# Load SQL magic
 %load_ext sql
-
-# Configure SQL Magic
-%config SqlMagic.autocommit = False  # Use explicit transactions
-%config SqlMagic.feedback = True     # Show row counts
-%config SqlMagic.displaycon = False  # Hide connection string
+%config SqlMagic.autocommit = False  # Require explicit COMMIT for safety
+%config SqlMagic.feedback = True     # Show row counts after each statement
+%config SqlMagic.displaycon = False  # Hide connection string in output
+%sql postgresql://postgres:postgres@localhost:5432/my_database
 ```
 
-### Connect to Your Database
-
-Use the same connection from Lesson 7:
+**Test your connection:**
 
 ```python
-# Replace with your actual connection string
-%sql postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT].supabase.co:5432/postgres
-
-# Test connection
-%sql SELECT current_database(), current_user;
+%%sql
+SELECT current_database(), current_user, version();
 ```
 
-### Verify Schema Exists
+---
+
+## Step 0: Recreate the Schema
+
+Unlike a persistent local database, each Colab session starts fresh — any schema created in Lesson 7 is gone. Instead of re-running the entire Lesson 7 lab, we use a pre-built SQL script to recreate it in one step.
+
+**Before running the cell below, upload `university_schema.sql` to your Colab session:**
+1. In the left sidebar, click the **Files** tab (folder icon)
+2. Click **Upload to session storage**
+3. Select `university_schema.sql` from `week_04/assets/`
+
+> The file is only available for the duration of the current session. You'll need to re-upload it each time you start a new Colab session.
+
+```python
+# Run the DDL script — creates all 6 tables with constraints
+!sudo -u postgres psql -d my_database -f /content/university_schema.sql
+```
+
+**Verify the tables exist:**
 
 ```python
 %%sql
@@ -70,25 +95,20 @@ ORDER BY table_name;
 <details>
 <summary>Expected Output</summary>
 
-You should see:
-- courses
-- departments
-- enrollments
-- professors
-- student_phones
-- students
+| table_name |
+|------------|
+| courses |
+| departments |
+| enrollments |
+| professors |
+| student_phones |
+| students |
 
-If these tables don't exist, go back to Lesson 7 lab and create them first.
+If any table is missing, re-upload `university_schema.sql` and re-run the cell above.
 
 </details>
 
----
-
-## Step 1: Populate Parent Tables with INSERT
-
-Start with tables that have no dependencies (no foreign keys).
-
-### Insert Departments
+> **`psql -f` in the real world:** Applying schema changes via a `.sql` file is the standard pattern for database migrations in production environments. Tools like Flyway and Liquibase automate this process by tracking which scripts have already been applied.
 
 ```python
 %%sql
@@ -99,7 +119,17 @@ DELETE FROM courses;
 DELETE FROM students;
 DELETE FROM professors;
 DELETE FROM departments;
+```
+---
 
+## Step 1: Populate Parent Tables with INSERT
+
+Start with tables that have no dependencies (no foreign keys).
+
+### Insert Departments
+
+```python
+%%sql
 -- Insert departments
 INSERT INTO departments (name, building) VALUES
     ('Computer Science', 'Tech Building'),
@@ -490,6 +520,8 @@ Note: MATH1101 grade unchanged (ELSE grade keeps existing value).
 
 </details>
 
+> **Warning — `CASE` without `ELSE` sets unmatched rows to `NULL`:** If you omit `ELSE`, any row that doesn't match a `WHEN` condition gets `NULL` — silently overwriting existing data. Always add `ELSE column_name` to preserve the current value for rows you don't intend to change.
+
 ### Safe UPDATE Pattern: SELECT Before UPDATE
 
 **Best Practice:** Always preview the changes before executing.
@@ -632,6 +664,8 @@ ROLLBACK;
 ---
 
 ## Step 7: Complex SELECT Queries
+
+> **Recall — SQL Execution Order:** The database processes clauses in this order regardless of how you write them: `FROM` → `JOIN` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY` → `LIMIT`. This matters because you can't reference a `SELECT` alias in a `WHERE` clause — `WHERE` runs before `SELECT`. See the concept doc for details.
 
 ### Basic Filtering and Sorting
 
@@ -899,13 +933,13 @@ ORDER BY c1.course_code;
 
 ### Exercise 5: Data Export to CSV
 
-**Task:** Export enrollment data to a CSV file using DuckDB for further analysis in Pandas.
+**Task:** Export enrollment data to a CSV file for further analysis in Pandas.
+
+> **Note on DuckDB:** DuckDB is an analytical database engine that can query PostgreSQL tables directly — we'll explore this deeply in Week 05. For now, we use the simpler Pandas approach via SQL Magic results.
 
 ```python
-import duckdb
-
-# TODO: Connect DuckDB to your PostgreSQL data and export
-# Hint: Use duckdb.read_csv() or directly query PostgreSQL connection string
+# TODO: Query enrollments via SQL Magic and export to CSV
+# Hint: SQL Magic returns a result object with a .DataFrame() method
 ```
 
 <details>
@@ -951,20 +985,61 @@ Congratulations! In this lab, you have successfully:
 - **Foreign keys enforce referential integrity** - Understand CASCADE vs RESTRICT
 - **Multi-row operations are faster** - Use batch inserts when possible
 
-**What's Next:**
+---
 
-You now have a fully functional database with:
-- 4 departments
-- 4 professors
-- 6 courses (with prerequisite relationships)
-- 5+ students
-- Phone numbers and enrollments with grades
+## Saving Your Work: Database Backup
 
-**Week 05 Preview:** Next week, you'll learn **analytical SQL** - JOINs, aggregations, window functions, and the transition from OLTP (PostgreSQL) to OLAP (DuckDB) for high-performance data analysis.
+Because Colab sessions are ephemeral, any data you insert is lost when the session ends. Use `pg_dump` to export your database as a portable SQL file you can download and reload later.
+
+`pg_dump` is a standard PostgreSQL utility — it outputs standard SQL that works on any PostgreSQL installation.
+
+### Option A — Full backup (schema + data)
+
+```python
+# Export the entire database to a single SQL file
+!sudo -u postgres pg_dump my_database > /content/university_backup.sql
+```
+
+This file contains all `CREATE TABLE` statements and all `INSERT` statements needed to fully reconstruct the database from scratch.
+
+### Option B — Schema and data separately
+
+```python
+# Schema only (DDL — no data)
+!sudo -u postgres pg_dump --schema-only my_database > /content/university_schema_backup.sql
+
+# Data only (INSERT statements — no CREATE TABLE)
+!sudo -u postgres pg_dump --data-only my_database > /content/university_data_backup.sql
+```
+
+Keeping them separate is useful when you want to reset data without changing the structure, or apply the same data to a differently configured database.
+
+### Download from Colab
+
+After running either option, download the file:
+1. Open the **Files** tab in the left sidebar
+2. Right-click `university_backup.sql`
+3. Select **Download**
+
+### Restore in a future session
+
+```python
+# Re-create the database from a backup
+!sudo -u postgres psql my_database < /content/university_backup.sql
+```
+
+Upload `university_backup.sql` using the Files panel (same as Step 0), then run the cell above.
 
 ---
 
 ## Troubleshooting
+
+### "relation does not exist" Error
+
+**Problem:** Error like `ERROR: relation "students" does not exist`
+- **Cause:** The schema from Lesson 7 was not carried over — Colab sessions are ephemeral
+- **Solution:** Re-run Step 0 to recreate the schema from `university_schema.sql`
+- **Prevention:** Always run the full setup block + Step 0 at the start of each session
 
 ### UPDATE/DELETE Affects Wrong Rows
 

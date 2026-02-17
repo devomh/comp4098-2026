@@ -23,13 +23,41 @@ Concept files should balance in-class coverage with opportunities for deeper sel
 | Content Type | Purpose | Format |
 | :--- | :--- | :--- |
 | **Core Content** | Must be understood in class. Covers the "what" and "why." | Regular sections |
-| **Deep Dive** | Extended explanations, mathematical foundations, or edge cases for advanced topics. Optional reading. | Collapsible `<details>` block with clear "Deep Dive" label |
+| **Deep Dive** | Extended explanations, mathematical foundations, or edge cases for advanced topics. Optional reading. | Collapsible `<details>` block under a shared `## Deep Dives (Optional)` section (see below) |
 | **Further Reading** | External resources for self-study after class. | Dedicated section at end of document |
 
 **When to include a Deep Dive:**
 *   Topics with mathematical or theoretical foundations (e.g., normalization proofs, set theory, B-tree complexity)
 *   Edge cases and exceptions that are important but not essential for basic understanding
 *   Historical context or alternative approaches
+
+**Structure for Deep Dives:**
+- **One deep dive:** Use a single `## Deep Dive: [Topic] (Optional)` heading with the `<details>` block directly below.
+- **Multiple deep dives:** Use `## Deep Dives (Optional)` as the parent heading, with `### A.`, `### B.` sub-headings each followed by their own `<details>` block. Do not use separate `##` headings per deep dive.
+
+```markdown
+<!-- Single deep dive -->
+## Deep Dive: [Topic Name] (Optional)
+<details>
+<summary>Click to expand: [Topic Name]</summary>
+...
+</details>
+
+<!-- Multiple deep dives -->
+## Deep Dives (Optional)
+
+### A. [Topic Name]
+<details>
+<summary>Click to expand: [Topic Name]</summary>
+...
+</details>
+
+### B. [Another Topic]
+<details>
+<summary>Click to expand: [Another Topic]</summary>
+...
+</details>
+```
 
 **Further Reading sources (in order of preference):**
 1.  **Textbook:** *Database Design - 2nd Edition* by Adrienne Watt (suggested course textbook)
