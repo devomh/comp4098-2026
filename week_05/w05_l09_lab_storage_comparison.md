@@ -30,7 +30,9 @@ Run this setup block first to install required packages.
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q pandas mermaid-py
+```
 
+```python
 import pandas as pd
 import time
 import random

@@ -26,6 +26,12 @@ By the end of this week, you'll understand how row-oriented and column-oriented 
 **Lab Exercise:**
 - [Comparing Storage Layouts](w05_l09_lab_storage_comparison.md)
 
+### Interactive Notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_05/w05_l09_lab_storage_comparison.ipynb)
+
+*Note: Replace `USERNAME` with your GitHub username once the repository is set up.*
+
 ---
 
 ## Lesson 10: Introduction to DuckDB
@@ -45,6 +51,12 @@ By the end of this week, you'll understand how row-oriented and column-oriented 
 
 **Lab Exercise:**
 - [Querying Local Files with DuckDB](w05_l10_lab_duckdb_querying.md)
+
+### Interactive Notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_05/w05_l10_lab_duckdb_querying.ipynb)
+
+*Note: Replace `USERNAME` with your GitHub username once the repository is set up.*
 
 ---
 
@@ -146,23 +158,6 @@ All labs use the following Python packages (installed automatically in notebooks
 - `duckdb` — In-process OLAP engine
 - `pandas` — Data analysis
 - `mermaid-py` — Diagram generation
-
-### Estimated Time
-- **Lesson 9:** 45 min concept + 60 min lab = 105 minutes
-- **Lesson 10:** 45 min concept + 60 min lab = 105 minutes
-- **Total:** ~3.5 hours (can be split across multiple sessions)
-
----
-
-## What's Next?
-
-### Week 06: Advanced SQL Techniques I
-- Complex JOINs (INNER, LEFT, RIGHT, FULL OUTER)
-- Aggregation and GROUP BY with HAVING
-- Solving multi-table analytical questions
-- Using both PostgreSQL and DuckDB for complex queries
-
-**Preview:** You'll combine your PostgreSQL knowledge (Week 04) with DuckDB's analytical power (Week 05) to answer complex multi-table questions using JOINs and aggregations.
 
 ---
 

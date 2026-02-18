@@ -340,13 +340,45 @@ Row stores mix types (int, varchar, date) within each row, making SIMD alignment
 
 ```mermaid
 graph TD
-    A["What is your workload?"] --> B{"Many small writes?<br/>INSERT/UPDATE/DELETE"}
-    A --> C{"Few large reads?<br/>Aggregations, Scans"}
+    A["What is your workload?"] --> B{"Need ACID transactions<br/>on live data?"}
+    A --> C{"Scanning millions of rows<br/>from historical snapshots?"}
     B -->|Yes| D["OLTP Engine<br/>PostgreSQL, MySQL"]
     C -->|Yes| E["OLAP Engine<br/>DuckDB, BigQuery"]
     A --> F{"Both?"}
     F -->|Yes| G["Hybrid Architecture<br/>OLTP + OLAP"]
 ```
+
+<details>
+<summary><strong>Example: University Student Information System</strong></summary>
+
+A university Student Information System (SIS) illustrates why hybrid architecture exists — neither engine alone can do both jobs well.
+
+**OLTP side (PostgreSQL):**
+- A student submits a course registration — that INSERT must be atomic so two students can't both claim the last seat
+- A professor updates a grade — ACID guarantees prevent concurrent writes from corrupting the record
+- Thousands of students hit the portal simultaneously during registration week, each needing sub-second responses on live data
+
+**OLAP side (DuckDB / data warehouse):**
+- Every night at 2 AM, an ETL job extracts the day's transactions into historical snapshots
+- Institutional research runs: *"What is the 5-year trend in STEM enrollment by municipality?"*
+- That query scans millions of rows across years of data — it doesn't need live data, it needs speed over large volumes
+
+**Why not just one engine?**
+- Running the 5-year trend scan directly on PostgreSQL during registration week competes with live transactions for I/O — registration slows to a crawl
+- Running registrations through DuckDB loses ACID guarantees — two students could both "successfully" register for the last seat in a full course
+
+**The hybrid flow:**
+```
+Student Portal → PostgreSQL (live, ACID)
+                      ↓ nightly ETL
+                 Parquet files / data warehouse
+                      ↓
+                 DuckDB ← Institutional Research
+```
+
+The key trade-off: analytical data is always slightly stale (up to 24 hours behind), which is acceptable for trend analysis but would be unacceptable for live registration.
+
+</details>
 
 ### When to Use Each
 
@@ -388,12 +420,17 @@ The crossover point depends on your dataset size and query complexity. For this 
 
 ### "Is DuckDB replacing PostgreSQL?"
 
-**A:** No. They serve different purposes:
+**A:** No — and the two projects are actively converging rather than competing. They serve different purposes:
 
 - **PostgreSQL** handles the **write-heavy, multi-user, transactional** side
 - **DuckDB** handles the **read-heavy, single-user, analytical** side
 
-They're complementary, not competitive. In fact, DuckDB can read directly from PostgreSQL databases, making them natural partners.
+The integration goes deeper than simply reading from one another. As of 2025, two complementary efforts make this partnership concrete:
+
+- **DuckDB → PostgreSQL:** DuckDB's built-in `postgres` extension lets you query a live PostgreSQL database as if it were a native DuckDB table — read, write, and export to Parquet without any ETL tooling.
+- **PostgreSQL → DuckDB (`pg_duckdb`):** An official open-source extension (built jointly by DuckDB and MotherDuck) that embeds DuckDB's vectorized engine *inside* PostgreSQL. Analytical queries are automatically routed through DuckDB's columnar execution engine, with queries that previously timed out in PostgreSQL completing in under 10 seconds — no data migration or syntax changes required.
+
+These are complementary tools, not substitutes. PostgreSQL owns the transactional layer; DuckDB accelerates the analytical layer — increasingly from within PostgreSQL itself.
 
 ### "What about cloud OLAP solutions like BigQuery or Snowflake?"
 
@@ -431,6 +468,7 @@ In this lesson, you learned the fundamental architectural differences between OL
 ### Documentation
 - [DuckDB: Why DuckDB?](https://duckdb.org/why_duckdb) — Official overview of DuckDB's design philosophy
 - [PostgreSQL Documentation: Architecture](https://www.postgresql.org/docs/current/tutorial-arch.html) — PostgreSQL's client-server architecture
+- [pg_duckdb — GitHub](https://github.com/duckdb/pg_duckdb) — Official extension embedding DuckDB's analytical engine inside PostgreSQL (v1.0, 2025)
 
 ### Articles & Tutorials
 - [The Design and Implementation of Modern Column-Oriented Database Systems](https://stratos.seas.harvard.edu/files/stratos/files/columnstoresfntdbs.pdf) — Academic survey of columnar database design (advanced reading)
