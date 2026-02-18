@@ -30,8 +30,6 @@ By the end of this week, you'll understand how row-oriented and column-oriented 
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_05/w05_l09_lab_storage_comparison.ipynb)
 
-*Note: Replace `USERNAME` with your GitHub username once the repository is set up.*
-
 ---
 
 ## Lesson 10: Introduction to DuckDB
@@ -55,8 +53,6 @@ By the end of this week, you'll understand how row-oriented and column-oriented 
 ### Interactive Notebook
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_05/w05_l10_lab_duckdb_querying.ipynb)
-
-*Note: Replace `USERNAME` with your GitHub username once the repository is set up.*
 
 ---
 
