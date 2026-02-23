@@ -302,8 +302,34 @@ result = duckdb.sql("""
     EXPLAIN ANALYZE
     SELECT AVG(gpa) FROM 'students.parquet'
 """)
-result.show()
+print(result.fetchone()[1])  # Extract and print the plan text (renders newlines correctly)
 ```
+
+<details>
+<summary>How to read this plan</summary>
+
+Read the plan **bottom up** — execution starts at the lowest node and flows upward:
+
+~~~
+QUERY                       ← final output returned to you
+    ↑
+EXPLAIN_ANALYZE             ← wraps result with timing metadata
+    ↑
+UNGROUPED_AGGREGATE         ← computes AVG(gpa), produces 1 row
+    ↑
+PROJECTION                  ← passes gpa values up the pipeline
+    ↑
+TABLE_SCAN (PARQUET_SCAN)   ← starts here: reads only the 'gpa' column from disk
+~~~
+
+Each node shows:
+- **What it does** (e.g., `PARQUET_SCAN`, `UNGROUPED_AGGREGATE`)
+- **How many rows** it produced
+- **How long it took**
+
+The key detail is at the bottom: `Projections: gpa` + `Total Files Read: 1` — DuckDB read **only the one column it needed**, skipping all others. This is column pruning in action. Compare this to a CSV query, where all columns would be read regardless.
+
+</details>
 
 ---
 
