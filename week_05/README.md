@@ -139,21 +139,7 @@ Production App → PostgreSQL (OLTP)
 ### Articles
 - [DuckDB: Why DuckDB?](https://duckdb.org/why_duckdb) — Design philosophy
 - [DuckDB vs. Pandas Performance](https://duckdb.org/2021/05/14/sql-on-pandas.html) — Benchmark comparison
-- [Column-Oriented Databases (CMU)](https://15721.courses.cs.cmu.edu/spring2024/slides/03-storage1.pdf) — Academic overview
-
----
-
-## Lab Requirements
-
-### Prerequisites
-- Google Colab account (free)
-- No database server needed — DuckDB runs in-process
-
-### Software Packages
-All labs use the following Python packages (installed automatically in notebooks):
-- `duckdb` — In-process OLAP engine
-- `pandas` — Data analysis
-- `mermaid-py` — Diagram generation
+- [Column-Oriented Databases (CMU)](https://15721.courses.cs.cmu.edu/spring2024/slides/02-data1.pdf) — Academic overview
 
 ---
 
@@ -165,4 +151,3 @@ If you encounter problems with:
 - **CSV parsing issues** — Check delimiter and header settings
 - **Parquet read errors** — Ensure files were written with a compatible library (Pandas, pyarrow)
 
-For additional help, refer to the troubleshooting sections in each lab file.

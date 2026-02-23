@@ -30,7 +30,9 @@ Run this setup block first to install required packages.
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q duckdb pandas mermaid-py
+```
 
+```python
 import duckdb
 import pandas as pd
 import time
@@ -47,10 +49,10 @@ print("Setup complete!")
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 DuckDB version: 1.x.x
 Setup complete!
-```
+~~~
 
 </details>
 
@@ -88,9 +90,9 @@ df.head()
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 Generated 100,000 records
-```
+~~~
 
 | | student_id | name | department | gpa | credits_completed | enrollment_year | is_active |
 |---|---|---|---|---|---|---|---|
@@ -123,11 +125,11 @@ print(f"Compression ratio: {csv_size / parquet_size:.1f}×")
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 CSV file size:     4.52 MB
 Parquet file size: 1.23 MB
 Compression ratio: 3.7×
-```
+~~~
 
 (Parquet is significantly smaller due to columnar compression)
 
@@ -148,7 +150,7 @@ result.show()
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌────────────┬───────────┬────────────┬──────┬───────────────────┬─────────────────┬───────────┐
 │ student_id │   name    │ department │ gpa  │ credits_completed │ enrollment_year │ is_active │
 │   int64    │  varchar  │  varchar   │ float│      int64        │      int64      │  boolean  │
@@ -159,7 +161,7 @@ result.show()
 │          4 │ Student_4 │ English    │ 3.45 │                42 │            2024 │ true      │
 │          5 │ Student_5 │ Physics    │ 2.11 │               127 │            2022 │ true      │
 └────────────┴───────────┴────────────┴──────┴───────────────────┴─────────────────┴───────────┘
-```
+~~~
 
 </details>
 
@@ -186,7 +188,7 @@ result.show()
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌────────────┬───────────────┬─────────┬─────────┬─────────┐
 │ department │ student_count │ avg_gpa │ min_gpa │ max_gpa │
 │  varchar   │    int64      │ double  │ double  │ double  │
@@ -198,7 +200,7 @@ result.show()
 │ Math       │         16778 │    1.99 │    0.00 │    4.00 │
 │ English    │         16575 │    1.99 │    0.00 │    4.00 │
 └────────────┴───────────────┴─────────┴─────────┴─────────┘
-```
+~~~
 
 (Values approximate due to random generation)
 
@@ -221,7 +223,7 @@ result.show()
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌────────────┬────────────────┬──────┬───────────────────┐
 │ student_id │     name       │ gpa  │ credits_completed │
 │   int64    │   varchar      │float │      int64        │
@@ -230,7 +232,7 @@ result.show()
 │      ...   │ ...            │ 3.99 │               ... │
 │      ...   │ ...            │ 3.99 │               ... │
 └────────────┴────────────────┴──────┴───────────────────┘
-```
+~~~
 
 (10 rows showing top CS students)
 
@@ -274,19 +276,19 @@ result.show()
 <details>
 <summary>Expected Output</summary>
 
-```text
-┌───────────────────┬─────────┬─────┬─────┬─────────┬───────┐
-│    column_name     │ column_type │ null │ key │ default │ extra │
-├───────────────────┼─────────┼─────┼─────┼─────────┼───────┤
-│ student_id        │ BIGINT  │ YES │     │         │       │
-│ name              │ VARCHAR │ YES │     │         │       │
-│ department        │ VARCHAR │ YES │     │         │       │
-│ gpa               │ DOUBLE  │ YES │     │         │       │
-│ credits_completed │ BIGINT  │ YES │     │         │       │
-│ enrollment_year   │ BIGINT  │ YES │     │         │       │
-│ is_active         │ BOOLEAN │ YES │     │         │       │
-└───────────────────┴─────────┴─────┴─────┴─────────┴───────┘
-```
+~~~text
+┌───────────────────┬─────────────┬──────┬─────┬─────────┬───────┐
+│    column_name    │ column_type │ null │ key │ default │ extra │
+├───────────────────┼─────────────┼──────┼─────┼─────────┼───────┤
+│ student_id        │ BIGINT      │ YES  │     │         │       │
+│ name              │ VARCHAR     │ YES  │     │         │       │
+│ department        │ VARCHAR     │ YES  │     │         │       │
+│ gpa               │ DOUBLE      │ YES  │     │         │       │
+│ credits_completed │ BIGINT      │ YES  │     │         │       │
+│ enrollment_year   │ BIGINT      │ YES  │     │         │       │
+│ is_active         │ BOOLEAN     │ YES  │     │         │       │
+└───────────────────┴─────────────┴──────┴─────┴─────────┴───────┘
+~~~
 
 </details>
 
@@ -322,26 +324,26 @@ def benchmark(query, label, runs=5):
     return avg_time
 
 print("Query: SELECT department, AVG(gpa) GROUP BY department")
-csv_time = benchmark(
+csv_time_1 = benchmark(
     "SELECT department, AVG(gpa) FROM 'students.csv' GROUP BY department",
     "CSV"
 )
-parquet_time = benchmark(
+parquet_time_1 = benchmark(
     "SELECT department, AVG(gpa) FROM 'students.parquet' GROUP BY department",
     "Parquet"
 )
-print(f"  Parquet speedup: {csv_time/parquet_time:.1f}×")
+print(f"  Parquet speedup: {csv_time_1/parquet_time_1:.1f}×")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 Query: SELECT department, AVG(gpa) GROUP BY department
   CSV:     12.34 ms (avg of 5 runs)
   Parquet:  2.56 ms (avg of 5 runs)
   Parquet speedup: 4.8×
-```
+~~~
 
 (Parquet is faster because it reads only the columns needed and uses compressed binary data)
 
@@ -351,26 +353,26 @@ Query: SELECT department, AVG(gpa) GROUP BY department
 
 ```python
 print("\nQuery: SELECT * WHERE department = 'CS' AND gpa > 3.5")
-csv_time = benchmark(
+csv_time_2 = benchmark(
     "SELECT * FROM 'students.csv' WHERE department = 'CS' AND gpa > 3.5",
     "CSV"
 )
-parquet_time = benchmark(
+parquet_time_2 = benchmark(
     "SELECT * FROM 'students.parquet' WHERE department = 'CS' AND gpa > 3.5",
     "Parquet"
 )
-print(f"  Parquet speedup: {csv_time/parquet_time:.1f}×")
+print(f"  Parquet speedup: {csv_time_2/parquet_time_2:.1f}×")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 Query: SELECT * WHERE department = 'CS' AND gpa > 3.5
   CSV:     8.45 ms (avg of 5 runs)
   Parquet: 3.12 ms (avg of 5 runs)
   Parquet speedup: 2.7×
-```
+~~~
 
 </details>
 
@@ -378,26 +380,26 @@ Query: SELECT * WHERE department = 'CS' AND gpa > 3.5
 
 ```python
 print("\nQuery: SELECT AVG(gpa) — single column")
-csv_time = benchmark(
+csv_time_3 = benchmark(
     "SELECT AVG(gpa) FROM 'students.csv'",
     "CSV"
 )
-parquet_time = benchmark(
+parquet_time_3 = benchmark(
     "SELECT AVG(gpa) FROM 'students.parquet'",
     "Parquet"
 )
-print(f"  Parquet speedup: {csv_time/parquet_time:.1f}×")
+print(f"  Parquet speedup: {csv_time_3/parquet_time_3:.1f}×")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 Query: SELECT AVG(gpa) — single column
   CSV:     6.78 ms (avg of 5 runs)
   Parquet: 0.89 ms (avg of 5 runs)
   Parquet speedup: 7.6×
-```
+~~~
 
 (Parquet shines most when reading few columns — it only reads the gpa column chunk)
 
@@ -412,8 +414,8 @@ summary = pd.DataFrame({
         'Filtered SELECT *',
         'Single column AVG'
     ],
-    'CSV (ms)': [12.34, 8.45, 6.78],
-    'Parquet (ms)': [2.56, 3.12, 0.89],
+    'CSV (ms)': [round(csv_time_1*1000, 2), round(csv_time_2*1000, 2), round(csv_time_3*1000, 2)],
+    'Parquet (ms)': [round(parquet_time_1*1000, 2), round(parquet_time_2*1000, 2), round(parquet_time_3*1000, 2)],
 })
 summary['Speedup'] = (summary['CSV (ms)'] / summary['Parquet (ms)']).round(1).astype(str) + '×'
 print(summary.to_string(index=False))
@@ -444,7 +446,7 @@ result.show()
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌─────────────────┬────────────────┬─────────┬──────────────┐
 │ enrollment_year │ total_students │ avg_gpa │ active_count │
 │      int64      │     int64      │ double  │    int128    │
@@ -456,7 +458,7 @@ result.show()
 │            2024 │          16653 │    2.00 │        12495 │
 │            2025 │          16643 │    2.00 │        12495 │
 └─────────────────┴────────────────┴─────────┴──────────────┘
-```
+~~~
 
 </details>
 
@@ -484,7 +486,7 @@ print(result_df)
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 <class 'pandas.core.frame.DataFrame'>
   department  avg_gpa  count
 0  Chemistry     2.01  12510
@@ -493,7 +495,7 @@ print(result_df)
 3    Biology     2.00  12556
 4       Math     1.99  12585
 5    English     1.99  12440
-```
+~~~
 
 </details>
 
@@ -540,7 +542,7 @@ print(duckdb_result)
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 Pandas:  15.23 ms
 DuckDB:   3.45 ms
 DuckDB speedup: 4.4×
@@ -553,7 +555,7 @@ DuckDB result:
 3    Biology          12556     2.00        74.95
 4       Math          12585     1.99        75.21
 5    English          12440     1.99        75.07
-```
+~~~
 
 </details>
 
@@ -582,14 +584,14 @@ for f in sorted(os.listdir('data_by_dept')):
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
   Biology.parquet: 210.5 KB
   CS.parquet: 208.3 KB
   Chemistry.parquet: 209.8 KB
   English.parquet: 208.1 KB
   Math.parquet: 210.9 KB
   Physics.parquet: 209.2 KB
-```
+~~~
 
 </details>
 
@@ -612,7 +614,7 @@ result.show()
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌────────────┬───────┬─────────┐
 │ department │ count │ avg_gpa │
 │  varchar   │ int64 │ double  │
@@ -624,7 +626,7 @@ result.show()
 │ CS         │ 16583 │    2.00 │
 │ English    │ 16575 │    1.99 │
 └────────────┴───────┴─────────┘
-```
+~~~
 
 </details>
 
@@ -674,9 +676,9 @@ print(f"Database file size: {os.path.getsize('university.duckdb') / 1_000_000:.2
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 Database file size: 1.45 MB
-```
+~~~
 
 </details>
 
@@ -701,7 +703,7 @@ Database file size: 1.45 MB
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌─────────────────┬───────┬────────┬────────────┬─────────┐
 │ enrollment_year │ total │ active │ pct_active │ avg_gpa │
 ├─────────────────┼───────┼────────┼────────────┼─────────┤
@@ -709,7 +711,7 @@ Database file size: 1.45 MB
 │            2021 │ 16616 │  12450 │       74.9 │    2.00 │
 │            ...  │  ...  │   ...  │       ...  │    ...  │
 └─────────────────┴───────┴────────┴────────────┴─────────┘
-```
+~~~
 
 </details>
 
@@ -733,7 +735,7 @@ Use `CASE WHEN gpa >= 3.5 THEN 'A (3.5-4.0)' WHEN gpa >= 3.0 THEN 'B (3.0-3.5)' 
 <details>
 <summary>Expected Output</summary>
 
-```text
+~~~text
 ┌──────────────┬───────┬─────────┐
 │  gpa_bucket  │ count │ pct     │
 ├──────────────┼───────┼─────────┤
@@ -743,7 +745,7 @@ Use `CASE WHEN gpa >= 3.5 THEN 'A (3.5-4.0)' WHEN gpa >= 3.0 THEN 'B (3.0-3.5)' 
 │ D (1.0-2.0)  │ 25000 │   25.0% │
 │ F (0.0-1.0)  │ 25000 │   25.0% │
 └──────────────┴───────┴─────────┘
-```
+~~~
 
 (Approximate — uniform random distribution)
 
@@ -823,25 +825,6 @@ WHERE (department, gpa) IN (
 
 ---
 
-## Cleanup
-
-```python
-# Remove generated files
-import os
-for f in ['students.csv', 'students.parquet', 'cs_honors.parquet', 'university.duckdb']:
-    if os.path.exists(f):
-        os.remove(f)
-
-# Remove department files
-import shutil
-if os.path.exists('data_by_dept'):
-    shutil.rmtree('data_by_dept')
-
-print("Cleanup complete!")
-```
-
----
-
 ## Summary
 
 In this lab, you have successfully:
@@ -862,7 +845,3 @@ In this lab, you have successfully:
 - **DuckDB + Pandas** is a powerful combination — SQL for aggregations, Pandas for data manipulation
 - **DuckDB uses PostgreSQL-compatible SQL** — your Week 04 knowledge transfers directly
 - **No server needed** — DuckDB runs in-process, ideal for notebooks and local analysis
-
-**What's Next:**
-
-In **Week 06**, you'll apply these skills to complex analytical queries — JOINs, aggregations, and GROUP BY operations across multiple tables using both PostgreSQL and DuckDB.

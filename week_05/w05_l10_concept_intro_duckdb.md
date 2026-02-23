@@ -32,9 +32,9 @@ In Lesson 9, you learned that OLAP engines use column-oriented storage, compress
 | Manage a running server process | Runs inside your Python process |
 | Limited to data in the database | Query any file on disk |
 
-DuckDB lets you write **SQL on files** — no server, no setup, no ETL. It's SQLite for analytics.
+DuckDB lets you **execute SQL against files** — no server, no setup, no ETL. It's SQLite for analytics.
 
-> **Analogy:** PostgreSQL is a **restaurant kitchen** — powerful, multi-user, but requires setup and a chef. DuckDB is a **microwave** — instant, personal, no setup, perfect for quick analytical meals.
+> **Analogy:** PostgreSQL is a **city power grid** — always on, serves many users, requires infrastructure and maintenance. DuckDB is a **portable generator** — plug it in anywhere, instant power, just for you.
 
 ---
 
@@ -136,7 +136,7 @@ Parquet File Structure:
 | Feature | CSV | Parquet |
 |:---|:---|:---|
 | **Human-readable** | Yes | No |
-| **Schema enforcement** | None | Strong (types embedded) |
+| **Schema enforcement** | None | Strong (schema is embedded inside the file itself) |
 | **Compression** | None | Built-in (Snappy, ZSTD) |
 | **Column pruning** | No (read all columns) | Yes (read only needed columns) |
 | **Predicate pushdown** | No | Yes (skip row groups based on stats) |
@@ -144,27 +144,6 @@ Parquet File Structure:
 | **Read speed (DuckDB)** | Slower | Much faster |
 | **Write speed** | Fast (simple text) | Slower (encoding + compression) |
 | **Ecosystem** | Universal (Excel, text editors) | Analytics (Spark, DuckDB, Pandas) |
-
-<details>
-<summary><strong>Deep Dive: Predicate Pushdown in Parquet</strong></summary>
-
-Parquet files store **column statistics** (min, max, null count) for each row group. DuckDB uses these statistics to **skip entire row groups** that can't match a filter condition.
-
-**Example:** Query `SELECT * FROM students WHERE gpa > 3.5`
-
-```
-Row Group 1: gpa min=1.2, max=2.8  → SKIP (max < 3.5)
-Row Group 2: gpa min=2.5, max=4.0  → READ (might contain matches)
-Row Group 3: gpa min=0.5, max=1.9  → SKIP (max < 3.5)
-```
-
-Without reading a single data value, DuckDB eliminates 2 out of 3 row groups. This is called **predicate pushdown** — the filter condition is "pushed down" into the file reader.
-
-**CSV files can't do this** because they have no metadata. Every row must be read and parsed, then filtered.
-
-This is why Parquet queries can be 10-100× faster than CSV for selective filters on large files.
-
-</details>
 
 ### When to Use Each
 
@@ -321,7 +300,7 @@ For most queries, the syntax is identical. Here are the key differences:
 | **Read CSV** | `COPY ... FROM 'file.csv'` (must create table first) | `SELECT * FROM 'file.csv'` |
 | **Read Parquet** | Not supported natively | `SELECT * FROM 'file.parquet'` |
 | **String concat** | `'hello' \|\| ' world'` | Same, or `concat('hello', ' world')` |
-| **SERIAL/auto-increment** | `SERIAL PRIMARY KEY` | `INTEGER PRIMARY KEY` (with sequences) |
+| **SERIAL/auto-increment** | `SERIAL PRIMARY KEY` | Same |
 | **Current timestamp** | `CURRENT_TIMESTAMP` | Same |
 | **ILIKE (case-insensitive)** | Supported | Supported |
 | **Window functions** | Supported | Supported (same syntax) |
@@ -330,6 +309,31 @@ For most queries, the syntax is identical. Here are the key differences:
 | **Multi-file queries** | Not supported | `SELECT * FROM 'data/*.csv'` |
 
 **Bottom line:** If you know PostgreSQL SQL, you can use DuckDB immediately. DuckDB adds convenience features but doesn't remove anything you know.
+
+---
+
+## Deep Dive: Predicate Pushdown in Parquet (Optional)
+
+<details>
+<summary>Click to expand: Predicate Pushdown in Parquet</summary>
+
+Parquet files store **column statistics** (min, max, null count) for each row group. DuckDB uses these statistics to **skip entire row groups** that can't match a filter condition.
+
+**Example:** Query `SELECT * FROM students WHERE gpa > 3.5`
+
+```
+Row Group 1: gpa min=1.2, max=2.8  → SKIP (max < 3.5)
+Row Group 2: gpa min=2.5, max=4.0  → READ (might contain matches)
+Row Group 3: gpa min=0.5, max=1.9  → SKIP (max < 3.5)
+```
+
+Without reading a single data value, DuckDB eliminates 2 out of 3 row groups. This is called **predicate pushdown** — the filter condition is "pushed down" into the file reader.
+
+**CSV files can't do this** because they have no metadata. Every row must be read and parsed, then filtered.
+
+This is why Parquet queries can be 10-100× faster than CSV for selective filters on large files.
+
+</details>
 
 ---
 
@@ -367,6 +371,10 @@ For most queries, the syntax is identical. Here are the key differences:
 
 If you work with data pipelines, ML training data, or cloud analytics, you'll encounter Parquet files constantly. Understanding Parquet is as fundamental as understanding CSV.
 
+### "Does DuckDB use Parquet as its internal storage format?"
+
+**A:** No. DuckDB uses its own proprietary columnar format (`.duckdb` file). Parquet is an **external interchange format** that DuckDB reads and writes very efficiently — but internally, DuckDB stores persistent data in a format optimized for its own execution engine. Think of Parquet as a language DuckDB speaks fluently, not the language it thinks in.
+
 ---
 
 ## Summary & Next Steps
@@ -381,8 +389,6 @@ In this lesson, you learned about DuckDB as an in-process OLAP engine:
 - **Workflow Position:** DuckDB sits between raw data (files) and analysis tools (Pandas/Matplotlib)
 
 **Connection to Lesson 9:** DuckDB implements the column-oriented storage, compression, and vectorized execution concepts you learned. It's the practical realization of those architectural principles.
-
-**Next:** In [Lesson 10 Lab](w05_l10_lab_duckdb_querying.md), you'll get hands-on with DuckDB — querying CSV and Parquet files, comparing performance with PostgreSQL, and building analytical queries.
 
 ---
 
