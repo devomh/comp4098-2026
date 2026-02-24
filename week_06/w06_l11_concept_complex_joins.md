@@ -48,7 +48,6 @@ graph LR
     subgraph Right["Table B (orders)"]
         B1["customer_id=1, Order#100"]
         B2["customer_id=1, Order#101"]
-        B3["customer_id=4, Order#102"]
     end
 
     A1 ---|"ON A.id = B.customer_id"| B1
@@ -61,10 +60,10 @@ graph LR
 
 | Join Type | Keeps from Left | Keeps from Right | Unmatched Rows |
 |:---|:---|:---|:---|
-| **INNER JOIN** | Only matched | Only matched | Discarded from both sides |
-| **LEFT JOIN** | All rows | Only matched | Left unmatched → NULLs for right columns |
-| **RIGHT JOIN** | Only matched | All rows | Right unmatched → NULLs for left columns |
-| **FULL OUTER JOIN** | All rows | All rows | NULLs on whichever side has no match |
+| **INNER JOIN** | Only matched (may duplicate) | Only matched (may duplicate) | Discarded from both sides |
+| **LEFT JOIN** | All rows (may duplicate per right match) | Only matched | Left unmatched → NULLs for right columns |
+| **RIGHT JOIN** | Only matched | All rows (may duplicate per left match) | Right unmatched → NULLs for left columns |
+| **FULL OUTER JOIN** | All rows (may duplicate per right match) | All rows (may duplicate per left match) | NULLs on whichever side has no match |
 
 ---
 
@@ -73,7 +72,7 @@ graph LR
 An INNER JOIN returns **only the rows that have a match in both tables**. If a row in the left table has no match in the right table, it's excluded — and vice versa.
 
 ```mermaid
-graph LR
+graph TB
     subgraph Result["INNER JOIN Result"]
         R1["Alice, Order#100"]
         R2["Alice, Order#101"]
@@ -81,7 +80,7 @@ graph LR
     style Result fill:#e8f5e9
 ```
 
-In the example above, Bob (no orders) and Carol (no orders) are **excluded**. Order#102 (customer_id=4, who doesn't exist) is also **excluded**.
+In the example above, Bob (no orders) and Carol (no orders) are **excluded**. Alice, who has two orders, appears **twice** in the result — one row per matching order. This is correct and expected behavior for a one-to-many relationship.
 
 ### Syntax
 
@@ -162,8 +161,7 @@ A RIGHT JOIN is the mirror image of LEFT JOIN: it keeps **all rows from the righ
 
 ```sql
 SELECT c.name, o.order_id
-FROM customers AS c
-RIGHT JOIN orders AS o
+FROM customers AS c RIGHT JOIN orders AS o
     ON c.id = o.customer_id;
 ```
 
@@ -172,37 +170,36 @@ In practice, most SQL developers **rewrite RIGHT JOINs as LEFT JOINs** by swappi
 ```sql
 -- RIGHT JOIN
 SELECT c.name, o.order_id
-FROM customers AS c
-RIGHT JOIN orders AS o ON c.id = o.customer_id;
+FROM customers AS c RIGHT JOIN orders AS o 
+  ON c.id = o.customer_id;
 
 -- Equivalent LEFT JOIN (preferred style)
 SELECT c.name, o.order_id
-FROM orders AS o
-LEFT JOIN customers AS c ON c.id = o.customer_id;
+FROM orders AS o LEFT JOIN customers AS c 
+  ON c.id = o.customer_id;
 ```
 
 ### FULL OUTER JOIN
 
 A FULL OUTER JOIN keeps **all rows from both tables**. Unmatched rows on either side get NULLs for the other side's columns.
 
-```mermaid
-graph LR
-    subgraph Result["FULL OUTER JOIN Result"]
-        R1["Alice, Order#100"]
-        R2["Alice, Order#101"]
-        R3["Bob, NULL"]
-        R4["Carol, NULL"]
-        R5["NULL, Order#102"]
-    end
-    style Result fill:#fff3e0
-```
+FULL OUTER JOIN makes the most sense when **neither table is a strict subset of the other**. Example: comparing which products sold in Q1 versus Q2. Each snapshot is computed independently — neither has a FK relationship to the other.
+
+| Q1 sold products | | Q2 sold products |
+|:---|:---|:---|
+| Product_A | matched | Product_A |
+| Product_B | matched | Product_B |
+| Product_C | Q1 only | *(absent)* |
+| *(absent)* | Q2 only | Product_D |
+
+Product_C sold in Q1 but had zero Q2 sales — perhaps it was discontinued. Product_D is new to Q2 and had no Q1 history. A LEFT JOIN would drop Product_D; a RIGHT JOIN would drop Product_C. Only FULL OUTER JOIN surfaces both.
 
 ### When to Use FULL OUTER JOIN
 
-- You need a **complete picture** of both tables, including orphans on both sides
-- "Show all customers and all orders, even if an order references a deleted customer"
-- Data reconciliation — finding mismatches between two systems
-- FULL OUTER JOIN is **rare in production analytics** but valuable for data quality checks
+- **Period-over-period comparison** — finding items that appear in one time window but not another
+- **Data reconciliation** — comparing two independent snapshots to find gaps on either side
+- "Which products sold in Q1 had no Q2 sales, and which Q2 products are newly launched?"
+- FULL OUTER JOIN is **rare in production analytics** but essential for gap analysis and data quality checks
 
 ---
 
@@ -253,14 +250,15 @@ graph LR
 
 ### Pitfall 1: Missing ON Clause (Cartesian Product)
 
-Forgetting the `ON` clause produces a **Cartesian product** — every row in Table A paired with every row in Table B:
+Forgetting the `ON` clause — or joining on the wrong column — produces a **Cartesian product**, where every row in Table A is paired with every row in Table B:
 
 ```sql
--- WRONG: Missing ON clause
+-- WRONG: Forgot the ON clause — this is an implicit CROSS JOIN
 SELECT c.name, o.order_id
-FROM customers AS c
-CROSS JOIN orders AS o;  -- 5,000 × 50,000 = 250,000,000 rows!
+FROM customers AS c, orders AS o;  -- 5,000 × 50,000 = 250,000,000 rows!
 ```
+
+(`CROSS JOIN` is valid SQL for when you *intentionally* want every combination, but accidentally omitting `ON` in a regular join produces the same explosive result.)
 
 If your join result has unexpectedly large row counts, check your ON clause first.
 
@@ -281,14 +279,43 @@ This is correct behavior, but it means **you can't simply COUNT(*) to get the nu
 
 ### Pitfall 3: NULLs in Join Columns
 
-NULLs **never match** in a join condition. If `customer_id` is NULL in the orders table, that row will be excluded from an INNER JOIN:
+NULLs **never match** in a join condition — `NULL = NULL` evaluates to UNKNOWN, not TRUE. If `customer_id` is NULL in the orders table, that row is silently excluded from an INNER JOIN:
 
 ```sql
--- NULL customer_id won't match any customer
--- This order row is silently excluded from INNER JOIN results
+-- Suppose orders contains a row: (id=999, customer_id=NULL, ...)
+-- The join condition NULL = c.id evaluates to UNKNOWN → row is dropped
+SELECT c.name, o.id AS order_id
+FROM customers AS c
+INNER JOIN orders AS o ON c.id = o.customer_id;
+-- order 999 never appears in the result
 ```
 
+The same applies to outer joins: a NULL join key will not match any row on the other side, so the NULL row still gets the outer-join NULL-padding treatment rather than a match.
+
 Be aware of NULL join keys in your data — they're a common source of "missing" rows.
+
+### Pitfall 4: A Downstream INNER JOIN Silently Cancels a LEFT JOIN
+
+Because joins are evaluated left-to-right, a later INNER JOIN operates on the output of an earlier LEFT JOIN. Any NULL rows produced by the LEFT JOIN will fail the INNER JOIN condition and be dropped — effectively turning the LEFT JOIN into an INNER JOIN:
+
+```sql
+-- INTENT: keep all orders, even those with no items
+FROM customers AS c
+INNER JOIN orders AS o       ON c.id = o.customer_id
+LEFT JOIN order_items AS oi  ON o.id = oi.order_id   -- NULLs produced here...
+INNER JOIN products AS p     ON oi.product_id = p.id -- ...are dropped here (NULL ≠ any p.id)
+```
+
+The LEFT JOIN appears to preserve orders with no items, but `oi.product_id` is NULL for those rows and `NULL = p.id` evaluates to UNKNOWN — so the final INNER JOIN silently discards them. To actually preserve those orders, the products join must also be a LEFT JOIN:
+
+```sql
+FROM customers AS c
+INNER JOIN orders AS o       ON c.id = o.customer_id
+LEFT JOIN order_items AS oi  ON o.id = oi.order_id
+LEFT JOIN products AS p      ON oi.product_id = p.id  -- NULLs now pass through
+```
+
+**Rule of thumb:** once you introduce a LEFT JOIN in a chain, every subsequent join on the outer side's columns must also be a LEFT JOIN to preserve the intended rows.
 
 ---
 
@@ -366,11 +393,13 @@ Step 3: Walk both sorted lists simultaneously
 
 | SQL | Pandas |
 |:---|:---|
-| `INNER JOIN` | `df.merge(other, how='inner')` |
-| `LEFT JOIN` | `df.merge(other, how='left')` |
-| `RIGHT JOIN` | `df.merge(other, how='right')` |
-| `FULL OUTER JOIN` | `df.merge(other, how='outer')` |
-| `ON a.id = b.id` | `on='id'` or `left_on='id', right_on='id'` |
+| `INNER JOIN ... ON a.id = b.id` | `df.merge(other, how='inner', on='id')` |
+| `LEFT JOIN ... ON a.id = b.id` | `df.merge(other, how='left', on='id')` |
+| `RIGHT JOIN ... ON a.id = b.id` | `df.merge(other, how='right', on='id')` |
+| `FULL OUTER JOIN ... ON a.id = b.id` | `df.merge(other, how='outer', on='id')` |
+| `ON a.id = b.fk` (different names) | `left_on='id', right_on='fk'` |
+
+> **Note:** Omitting `on=` in `df.merge()` joins on all column names common to both DataFrames — the pandas equivalent of `NATURAL JOIN`. This can silently produce wrong results if both DataFrames share an unintended column name (e.g., both have a `date` column). Always specify `on=` explicitly.
 
 SQL JOINs are typically faster than Pandas merges for large datasets because DuckDB uses hash joins and vectorized execution.
 
@@ -392,10 +421,6 @@ In this lesson, you learned the four SQL join types:
 - **FULL OUTER JOIN:** All rows from both tables (NULLs on either side)
 
 You also learned to chain multi-table joins and avoid common pitfalls like Cartesian products, duplicate rows, and NULL join keys.
-
-**Next:** In [Lesson 11 Lab](w06_l11_lab_multi_table_queries.md), you'll apply these join types to an e-commerce dataset with DuckDB — joining customers, orders, order_items, and products to answer real analytical questions.
-
-Then in **Lesson 12**, you'll combine joins with GROUP BY and aggregate functions to produce summary reports.
 
 ---
 

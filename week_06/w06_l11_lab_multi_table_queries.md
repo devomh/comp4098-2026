@@ -29,8 +29,10 @@ Run this setup block first to install required packages.
 
 ```python
 # Setup: Run this cell first (required for Colab)
-!pip install -q duckdb pandas mermaid-py
+!pip install -q duckdb pandas
+```
 
+```python
 import duckdb
 import pandas as pd
 import random
@@ -99,7 +101,7 @@ erDiagram
 
 ## Step 1: Generate & Load the Dataset
 
-We'll generate a realistic e-commerce dataset and save it as Parquet files (the preferred analytical format from Lesson 10).
+We'll generate a realistic e-commerce dataset and save it as Parquet files.
 
 ```python
 random.seed(42)
@@ -379,14 +381,16 @@ result.show()
 
 ```python
 # How many customers never ordered?
+# Use SELECT DISTINCT in the subquery to deduplicate orders per customer,
+# so each customer matches at most one row and COUNT(*) stays accurate.
 result = duckdb.sql("""
     SELECT
         COUNT(*) AS total_customers,
-        COUNT(*) - COUNT(o.id) AS never_ordered,
-        COUNT(o.id) AS ordered_at_least_once
+        SUM(CASE WHEN o.customer_id IS NULL THEN 1 ELSE 0 END) AS never_ordered,
+        SUM(CASE WHEN o.customer_id IS NOT NULL THEN 1 ELSE 0 END) AS ordered_at_least_once
     FROM customers AS c
     LEFT JOIN (
-        SELECT DISTINCT customer_id, 1 AS id
+        SELECT DISTINCT customer_id
         FROM orders
     ) AS o ON c.id = o.customer_id
 """)
@@ -529,10 +533,22 @@ The row count matches order_items because each order item maps to exactly one or
 
 ### RIGHT JOIN — Products That Were Never Ordered
 
-Let's check if any products have never appeared in an order.
+With 50,000 orders spanning all 200 products, every existing product has been ordered. Let's simulate a realistic business event: three new products were added to the catalog after the holiday season and have no order history yet.
 
 ```python
-# RIGHT JOIN: all products, even those never ordered
+# Simulate newly launched products — added to catalog after orders were placed
+duckdb.sql("""
+    INSERT INTO products VALUES
+        (201, 'SmartWatch_Pro',    'Electronics',    899.99),
+        (202, 'AirPurifier_Home', 'Home & Kitchen', 149.99),
+        (203, 'TrailRunner_X',    'Sports',          59.99)
+""")
+
+print("3 new products added to catalog (no order history yet).")
+```
+
+```python
+# RIGHT JOIN: all products, even those with no matching order_items
 result = duckdb.sql("""
     SELECT
         p.id AS product_id,
@@ -553,38 +569,76 @@ result.show()
 <summary>Expected Output</summary>
 
 ~~~text
-(0 rows — with 50,000 orders and random product selection, all 200 products are likely ordered at least once)
+┌────────────┬──────────────────┬────────────────┬───────────────┐
+│ product_id │     product      │    category    │ times_ordered │
+│   int64    │     varchar      │    varchar     │     int64     │
+├────────────┼──────────────────┼────────────────┼───────────────┤
+│        201 │ SmartWatch_Pro   │ Electronics    │             0 │
+│        202 │ AirPurifier_Home │ Home & Kitchen │             0 │
+│        203 │ TrailRunner_X    │ Sports         │             0 │
+└────────────┴──────────────────┴────────────────┴───────────────┘
 ~~~
 
-All products have been ordered at least once. With 150,000 order items across 200 products, this is expected.
+The three new products appear because RIGHT JOIN preserves every row from the right table (`products`), even when no `order_items` row matches. `COUNT(oi.id)` returns 0 (not NULL) because `COUNT` ignores NULLs — a useful idiom for "zero vs. missing".
 
 </details>
 
-### FULL OUTER JOIN — Finding Orphans on Both Sides
+**Key Insight:** `FROM order_items RIGHT JOIN products` is equivalent to `FROM products LEFT JOIN order_items`. In practice, most teams prefer LEFT JOIN for readability; RIGHT JOIN is useful when you want to emphasize that the right table drives the result set.
+
+### FULL OUTER JOIN — Regional Targets vs. Actual Sales
+
+FULL OUTER JOIN is the right tool when two tables may each contain rows the other lacks. A classic business scenario: comparing a planning table against actual results, where mismatches exist on **both** sides.
 
 ```python
-# Demonstrate FULL OUTER JOIN: find mismatches between orders and order_items
-# First, let's create a scenario with orphan data
+# Sales targets by region — two deliberate mismatches:
+#   'International' has a target but no customers in ShopStream
+#   'Northwest' has customers and real sales but no target was set
 duckdb.sql("""
-    CREATE OR REPLACE TABLE demo_left AS
-    SELECT * FROM (VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol')) AS t(id, name)
+    CREATE OR REPLACE TABLE regional_targets AS
+    SELECT * FROM (VALUES
+        ('Northeast',    500000),
+        ('Southeast',    450000),
+        ('Midwest',      400000),
+        ('West',         600000),
+        ('Southwest',    350000),
+        ('International', 200000)
+    ) AS t(region, sales_target)
 """)
+```
+
+```python
+# Actual revenue by region — computed from the real ShopStream data
 duckdb.sql("""
-    CREATE OR REPLACE TABLE demo_right AS
-    SELECT * FROM (VALUES (1, 'Order_A'), (2, 'Order_B'), (4, 'Order_C')) AS t(id, name)
+    CREATE OR REPLACE TABLE actual_regional_sales AS
+    SELECT
+        c.region,
+        ROUND(SUM(oi.quantity * oi.unit_price), 2) AS actual_revenue
+    FROM customers AS c
+    INNER JOIN orders AS o       ON c.id = o.customer_id
+    INNER JOIN order_items AS oi ON o.id = oi.order_id
+    GROUP BY c.region
 """)
 
-# FULL OUTER JOIN shows all rows from both sides
+duckdb.sql("SELECT * FROM actual_regional_sales ORDER BY region").show()
+```
+
+```python
+# FULL OUTER JOIN: match every target row to every sales row — mismatches appear on both sides
 result = duckdb.sql("""
     SELECT
-        l.id AS left_id,
-        l.name AS left_name,
-        r.id AS right_id,
-        r.name AS right_name
-    FROM demo_left AS l
-    FULL OUTER JOIN demo_right AS r
-        ON l.id = r.id
-    ORDER BY COALESCE(l.id, r.id)
+        COALESCE(t.region, s.region) AS region,
+        t.sales_target,
+        s.actual_revenue,
+        CASE
+            WHEN t.sales_target IS NULL   THEN 'No target set'
+            WHEN s.actual_revenue IS NULL THEN 'No sales recorded'
+            WHEN s.actual_revenue >= t.sales_target THEN 'On target'
+            ELSE 'Below target'
+        END AS status
+    FROM regional_targets AS t
+    FULL OUTER JOIN actual_regional_sales AS s
+        ON t.region = s.region
+    ORDER BY COALESCE(t.region, s.region)
 """)
 result.show()
 ```
@@ -593,26 +647,30 @@ result.show()
 <summary>Expected Output</summary>
 
 ~~~text
-┌─────────┬───────────┬──────────┬────────────┐
-│ left_id │ left_name │ right_id │ right_name │
-│  int64  │  varchar  │  int64   │  varchar   │
-├─────────┼───────────┼──────────┼────────────┤
-│       1 │ Alice     │        1 │ Order_A    │
-│       2 │ Bob       │        2 │ Order_B    │
-│       3 │ Carol     │     NULL │ NULL       │
-│    NULL │ NULL      │        4 │ Order_C    │
-└─────────┴───────────┴──────────┴────────────┘
+┌───────────────┬──────────────┬────────────────┬───────────────────┐
+│    region     │ sales_target │ actual_revenue │      status       │
+│    varchar    │    int64     │    double      │      varchar      │
+├───────────────┼──────────────┼────────────────┼───────────────────┤
+│ International │       200000 │           NULL │ No sales recorded │
+│ Midwest       │       400000 │      ...       │ On target / Below │
+│ Northeast     │       500000 │      ...       │ On target / Below │
+│ Northwest     │         NULL │      ...       │ No target set     │
+│ Southeast     │       450000 │      ...       │ On target / Below │
+│ Southwest     │       350000 │      ...       │ On target / Below │
+│ West          │       600000 │      ...       │ On target / Below │
+└───────────────┴──────────────┴────────────────┴───────────────────┘
 ~~~
 
-- Row 3: Carol has no match on the right (NULL)
-- Row 4: Order_C has no match on the left (NULL)
+- **International**: has a target but zero customers in ShopStream → `actual_revenue` is NULL (orphan on the left)
+- **Northwest**: has real customers and sales but no target was set → `sales_target` is NULL (orphan on the right)
+- A LEFT JOIN would drop International; a RIGHT JOIN would drop Northwest. Only FULL OUTER JOIN surfaces both.
 
 </details>
 
 ```python
-# Clean up demo tables
-duckdb.sql("DROP TABLE demo_left")
-duckdb.sql("DROP TABLE demo_right")
+# Clean up intermediate tables
+duckdb.sql("DROP TABLE IF EXISTS regional_targets")
+duckdb.sql("DROP TABLE IF EXISTS actual_regional_sales")
 ```
 
 ---
@@ -811,19 +869,6 @@ Sort by total orders descending.
 
 ---
 
-## Cleanup
-
-```python
-# Remove generated files
-import shutil
-if os.path.exists('ecommerce'):
-    shutil.rmtree('ecommerce')
-
-print("Cleanup complete!")
-```
-
----
-
 ## Summary
 
 In this lab, you practiced:
@@ -831,16 +876,13 @@ In this lab, you practiced:
 1. **INNER JOIN** — Matching customers to their orders (only matched rows)
 2. **LEFT JOIN** — Finding customers who never ordered (preserving all left rows)
 3. **Multi-table joins** — Chaining 4 tables (customers → orders → order_items → products) for complete order details
-4. **RIGHT JOIN** — Checking for products never ordered
-5. **FULL OUTER JOIN** — Finding orphan rows on both sides
+4. **RIGHT JOIN** — Finding newly launched products with no order history
+5. **FULL OUTER JOIN** — Reconciling regional sales targets against actual revenue (surfacing orphans on both sides)
 6. **Join pitfalls** — Cartesian products, COUNT(*) overcounting, NULL behavior
 
 **Key Takeaways:**
 - **LEFT JOIN + IS NULL** is the standard pattern for "find missing" queries
-- **INNER JOIN** reduces row count; **LEFT JOIN** preserves the left table's row count
+- **INNER JOIN** reduces row count; **LEFT/RIGHT JOIN** preserves all rows from one side (duplicating when multiple matches exist)
+- **FULL OUTER JOIN** is the reconciliation tool: use it when both tables can have rows the other lacks
 - **Always use table aliases** and **explicit column prefixes** in multi-table queries
 - **COUNT(DISTINCT ...)** is essential after one-to-many joins
-
-**What's Next:**
-
-In **Lesson 12**, you'll combine joins with GROUP BY and aggregate functions (COUNT, SUM, AVG) to build summary reports and management dashboards from this same dataset.
