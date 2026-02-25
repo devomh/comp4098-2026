@@ -29,12 +29,13 @@ Run this setup block first to install required packages.
 
 ```python
 # Setup: Run this cell first (required for Colab)
-!pip install -q duckdb pandas
+!pip install -q duckdb pandas mermaid-py
 ```
 
 ```python
 import duckdb
 import pandas as pd
+from mermaid import Mermaid
 import random
 import os
 from datetime import date, timedelta
@@ -63,7 +64,10 @@ Setup complete!
 
 You're a data analyst at **ShopStream**, an online retail company. Your manager wants insights into customer behavior, product performance, and order patterns. The data lives in four tables:
 
-```mermaid
+```python
+from mermaid import Mermaid
+
+Mermaid("""
 erDiagram
     customers ||--o{ orders : "places"
     orders ||--|{ order_items : "contains"
@@ -95,6 +99,7 @@ erDiagram
         string category
         float price
     }
+""")
 ```
 
 ---
