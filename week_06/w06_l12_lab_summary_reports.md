@@ -180,7 +180,7 @@ Dataset loaded into DuckDB!
 
 ## Step 2: Simple Aggregates (No GROUP BY)
 
-Start with whole-table aggregates to get a big-picture overview.
+Start with whole-table aggregates to get a big-picture overview. These queries intentionally include **all order statuses** to show the full scope of the data. Later sections filter to completed orders only for management reporting.
 
 ```python
 # Overall business metrics
@@ -249,6 +249,8 @@ result.show()
 ---
 
 ## Step 3: GROUP BY Basics
+
+These queries also include all order statuses to show the GROUP BY pattern without extra filters. From Step 5 onward, we add `WHERE o.status = 'completed'` — the standard for management reports.
 
 ### Revenue by Product Category
 
@@ -460,7 +462,7 @@ result = duckdb.sql("""
         c.id,
         c.name,
         c.region,
-        COUNT(*) AS order_count,
+        COUNT(DISTINCT o.id) AS order_count,
         ROUND(SUM(oi.quantity * oi.unit_price), 2) AS total_spent
     FROM customers AS c
     JOIN orders AS o ON c.id = o.customer_id
@@ -686,7 +688,7 @@ ORDER BY month
 
 ### Exercise 2: Categories with High Average Price
 
-**Task:** Find product categories where the average product price is greater than $250. Show category, number of products, average price, and total revenue from completed orders.
+**Task:** Find product categories where the **average catalog price** of products in the category is greater than $250. Show category, number of products, average catalog price, and total revenue from completed orders.
 
 ```python
 # TODO: Write your query using HAVING
@@ -734,15 +736,19 @@ Show the tier, number of customers, and total revenue per tier. Include the 500 
 WITH customer_spending AS (
     SELECT
         c.id,
-        COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_spent
+        -- Detect whether the customer has ANY orders at all
+        COUNT(DISTINCT o.id) AS total_orders,
+        -- Spending is based on completed orders only
+        COALESCE(SUM(CASE WHEN o.status = 'completed'
+                      THEN oi.quantity * oi.unit_price END), 0) AS total_spent
     FROM customers AS c
-    LEFT JOIN orders AS o ON c.id = o.customer_id AND o.status = 'completed'
+    LEFT JOIN orders AS o ON c.id = o.customer_id
     LEFT JOIN order_items AS oi ON o.id = oi.order_id
     GROUP BY c.id
 )
 SELECT
     CASE
-        WHEN total_spent = 0 THEN 'No Orders'
+        WHEN total_orders = 0 THEN 'No Orders'
         WHEN total_spent < 5000 THEN 'Bronze'
         WHEN total_spent < 20000 THEN 'Silver'
         WHEN total_spent < 50000 THEN 'Gold'

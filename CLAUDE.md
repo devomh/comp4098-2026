@@ -84,7 +84,7 @@ YAML frontmatter required (`type: challenge`). Sections: Scenario → Dataset �
 
 ---
 
-## Progress (as of 2026-02-21)
+## Progress (as of 2026-03-07)
 
 | Week | Lessons | Status |
 | :--- | :--- | :--- |
@@ -94,9 +94,10 @@ YAML frontmatter required (`type: challenge`). Sections: Scenario → Dataset �
 | week_04 | L07 (DDL), L08 (DML) | ✅ Complete |
 | week_05 | L09 (OLTP vs OLAP), L10 (DuckDB) | 🟡 In progress |
 | week_06 | L11 (Complex Joins), L12 (Aggregation & Grouping) | ✅ Complete |
-| week_07+ | L13–L30 | ❌ Not started |
+| week_07 | L13 (Window Functions), L14 (CTEs & Advanced Analytics) | ✅ Complete |
+| week_08+ | L15–L30 | ❌ Not started |
 
-**Next up:** Week 07 — L13 (Window Functions) + L14 (CTEs) · Module 2
+**Next up:** Week 08 — L15 (Performance Benchmarking) + L16 (Query Optimization) · Module 2
 
 ---
 
