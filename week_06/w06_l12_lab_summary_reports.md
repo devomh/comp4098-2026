@@ -30,7 +30,9 @@ Run this setup block first to install required packages.
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q duckdb pandas mermaid-py
+```
 
+```python
 import duckdb
 import pandas as pd
 import random
@@ -410,7 +412,59 @@ result.show()
 
 </details>
 
-**Note:** This query uses a **window function** (ROW_NUMBER) as a preview of Week 07 topics. For now, focus on the GROUP BY pattern inside the CTE.
+<details>
+<summary>How this query works: ROW_NUMBER() OVER (PARTITION BY ...)</summary>
+
+This query answers: **"What is the top-grossing product category in each region?"**
+
+**The CTE: `region_category`**
+
+First, it computes revenue for every `(region, category)` pair by joining all four tables and grouping:
+
+~~~text
+GROUP BY c.region, p.category
+~~~
+
+This produces one row per unique combination — e.g., "Northeast + Electronics", "Northeast + Clothing", etc. (36 rows total: 6 regions × 6 categories).
+
+**ROW_NUMBER() OVER (PARTITION BY c.region ORDER BY SUM(...) DESC)**
+
+This is a **window function**. Unlike `GROUP BY` which collapses rows, window functions **add a computed column to each existing row** without reducing the row count.
+
+- `PARTITION BY c.region` — restarts the numbering independently for each region. Think of it as drawing a fence around each region's rows.
+- `ORDER BY SUM(...) DESC` — within each region's fence, ranks rows from highest revenue to lowest.
+- `ROW_NUMBER()` — assigns 1, 2, 3, ... to each row within that fence.
+
+~~~text
+region     | category    | revenue | rn
+-----------+-------------+---------+----
+Northeast  | Electronics | 420,000 |  1   ← highest in Northeast
+Northeast  | Clothing    | 310,000 |  2
+Northeast  | Books       | 180,000 |  3
+Southeast  | Clothing    | 415,000 |  1   ← rn resets! highest in Southeast
+Southeast  | Electronics | 390,000 |  2
+Southeast  | Books       | 200,000 |  3
+~~~
+
+The key insight: `rn` resets to 1 for each new region — that's the `PARTITION BY` effect.
+
+**The outer query: `WHERE rn = 1`**
+
+~~~text
+SELECT region, category, revenue
+FROM region_category
+WHERE rn = 1
+~~~
+
+This keeps only the `rn = 1` row per region — the top category by revenue in each region. You can't do this with `GROUP BY` alone because filtering on `rn` requires the ranking column to already exist.
+
+**Why a CTE and not a subquery?**
+
+You can't reference `rn` in a `WHERE` clause in the same `SELECT` where it's computed — SQL evaluates `WHERE` before `SELECT`. The CTE materializes the ranked result first, then the outer query filters it. A subquery would work too, but the CTE is more readable.
+
+Window functions are covered in depth in **Lesson 13**.
+
+</details>
 
 ---
 
@@ -819,19 +873,6 @@ Only include products from completed orders. Sort by revenue descending, show to
 
 ---
 
-## Cleanup
-
-```python
-# Remove generated files
-import shutil
-if os.path.exists('ecommerce'):
-    shutil.rmtree('ecommerce')
-
-print("Cleanup complete!")
-```
-
----
-
 ## Summary
 
 In this lab, you built management reports using the full analytical SQL pattern:
@@ -849,7 +890,3 @@ In this lab, you built management reports using the full analytical SQL pattern:
 - **COUNT(DISTINCT ...)** is essential when joining one-to-many relationships
 - **Multi-level GROUP BY** creates hierarchical summaries (region → category)
 - **DuckDB handles complex aggregations efficiently** — no indexes needed
-
-**What's Next:**
-
-In **Week 07**, you'll learn **Window Functions** — aggregations that run across rows **without collapsing them**. This enables rankings, running totals, moving averages, and row-level comparisons that GROUP BY can't do.

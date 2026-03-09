@@ -33,6 +33,21 @@ GROUP BY and aggregate functions are the SQL tools that answer these questions.
 
 ---
 
+## Dataset Used in This Lesson
+
+All examples query a ShopStream e-commerce dataset (the same one built in the lab):
+
+```
+customers  (id, name, city, region, signup_date)
+products   (id, name, category, price)
+orders     (id, customer_id, order_date, status)   -- status: 'completed' | 'pending' | 'cancelled'
+order_items(id, order_id, product_id, quantity, unit_price)
+```
+
+The lab generates this dataset synthetically: 5,000 customers, 200 products, 50,000 orders, and ~150,000 order items.
+
+---
+
 ## Core Concept A: Aggregate Functions
 
 An aggregate function takes **many rows** as input and produces **one value** as output.
@@ -430,10 +445,6 @@ In this lesson, you learned:
 - **Multi-Level Grouping:** GROUP BY col1, col2 creates hierarchical summaries
 - **JOINs + Aggregations:** The core analytical pattern — JOIN to assemble, GROUP BY to summarize
 - **Execution Order:** FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY
-
-**Next:** In [Lesson 12 Lab](w06_l12_lab_summary_reports.md), you'll build management reports and dashboard queries using the e-commerce dataset — combining JOINs, GROUP BY, HAVING, and ORDER BY into complete analytical workflows.
-
-Then in **Week 07**, you'll learn **Window Functions** — aggregations that don't collapse rows, enabling running totals, rankings, and moving averages.
 
 ---
 
