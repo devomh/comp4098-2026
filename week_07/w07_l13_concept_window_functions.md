@@ -40,7 +40,7 @@ The key difference is in the output:
 
 | Aspect | GROUP BY | Window Function |
 |:---|:---|:---|
-| **Output rows** | One row per group (N → M, where M < N) | Same number of rows as input (N → N) |
+| **Output rows** | One row per group (N → M, where N > M) | Same number of rows as input (N → N) |
 | **Detail preserved?** | No — individual rows are collapsed | Yes — every row stays |
 | **Adds columns?** | Replaces detail with aggregates | Adds computed columns alongside existing data |
 | **Use case** | Summary reports | Analytics, rankings, running calculations |
@@ -65,7 +65,7 @@ FROM product_sales;
 The GROUP BY query returns 6 rows. The window function query returns **every row in the table**, each annotated with its category's total.
 
 ```mermaid
-graph LR
+graph TB
     subgraph "GROUP BY (N → M)"
         A1["Row 1: Electronics, $500"] --> G["GROUP BY category"]
         A2["Row 2: Electronics, $300"] --> G
@@ -74,16 +74,19 @@ graph LR
         G --> R1["Electronics: $800"]
         G --> R2["Clothing: $350"]
     end
+```
 
+```mermaid
+graph LR
     subgraph "Window Function (N → N)"
-        B1["Row 1: Electronics, $500"] --> W["SUM OVER(PARTITION BY)"]
-        B2["Row 2: Electronics, $300"] --> W
-        B3["Row 3: Clothing, $200"] --> W
-        B4["Row 4: Clothing, $150"] --> W
-        W --> S1["Row 1: Electronics, $500, total=$800"]
-        W --> S2["Row 2: Electronics, $300, total=$800"]
-        W --> S3["Row 3: Clothing, $200, total=$350"]
-        W --> S4["Row 4: Clothing, $150, total=$350"]
+        B1["Row 1<br/>Electronics, $500"] --> W["SUM OVER <br/>(PARTITION BY category)<br/>as total"]
+        B2["Row 2<br/>Electronics, $300"] --> W
+        B3["Row 3<br/>Clothing, $200"] --> W
+        B4["Row 4<br/>Clothing, $150"] --> W
+        W --> S1["Row 1: Electronics $500,<br/> total=$800"]
+        W --> S2["Row 2: Electronics $300,<br/> total=$800"]
+        W --> S3["Row 3: Clothing $200,<br/> total=$350"]
+        W --> S4["Row 4: Clothing $150,<br/> total=$350"]
     end
 ```
 
@@ -108,7 +111,7 @@ function_name(arguments) OVER (
 | OVER Clause | Meaning | Example Use |
 |:---|:---|:---|
 | `OVER ()` | All rows in the table | Grand total, percentage of total |
-| `OVER (PARTITION BY cat)` | All rows in the same category | Category total next to each product |
+| `OVER (PARTITION BY category)` | All rows in the same category | Category total next to each product |
 | `OVER (ORDER BY date)` | All rows, ordered by date | Running total across all rows |
 | `OVER (PARTITION BY cat ORDER BY date)` | Rows in same category, ordered by date | Running total per category |
 
@@ -153,7 +156,7 @@ Consider four exam scores: **95, 90, 90, 85**
 
 ### Syntax
 
-All three require `ORDER BY` inside the `OVER` clause:
+All three require `ORDER BY` inside the `OVER` clause for meaningful results:
 
 ```sql
 SELECT
@@ -271,7 +274,7 @@ graph LR
 
 For the current row (Mar), the 3-month moving average includes **2 PRECEDING** (Jan, Feb) and **CURRENT ROW** (Mar): ($100K + $120K + $90K) / 3 = $103.3K.
 
-Frame clauses become especially powerful when combined with CTEs for moving averages and trend analysis — which we'll explore in Lesson 14.
+Frame clauses become especially powerful when combined with CTEs for moving averages and trend analysis.
 
 ---
 
@@ -332,8 +335,6 @@ This pattern:
 2. **Outer query** filters to only the top 3 per group
 3. Uses `ROW_NUMBER` (not `RANK`) to guarantee exactly N rows per group, even with ties
 
-You saw a preview of this pattern in [Lesson 12, Step 4](../week_06/w06_l12_lab_summary_reports.md). In the L13 lab, you'll practice it formally.
-
 </details>
 
 ---
@@ -377,10 +378,6 @@ In this lesson, you learned:
 - **Running Aggregates:** SUM/AVG with OVER(ORDER BY) for cumulative calculations
 - **Frame Clauses:** ROWS BETWEEN controls exactly which rows are included in the window
 - **Top-N Per Group:** CTE + ROW_NUMBER pattern for filtering on window function results
-
-**Next:** In [Lesson 13 Lab](w07_l13_lab_ranking_problems.md), you'll apply these concepts to the ShopStream e-commerce dataset — building rankings, running totals, and percentage-of-total calculations.
-
-Then in **Lesson 14**, you'll learn **CTEs and offset functions** (LEAD/LAG) for year-over-year comparisons and moving averages.
 
 ---
 

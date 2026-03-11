@@ -30,7 +30,9 @@ Run this setup block first to install required packages.
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q duckdb pandas mermaid-py
+```
 
+```python
 import duckdb
 import pandas as pd
 import random
@@ -70,21 +72,44 @@ Same e-commerce dataset as Lessons 11–12 (self-contained for Colab).
 ```python
 random.seed(42)
 
-# --- Customers (5,000 rows, some will have no orders) ---
-regions = ['Northeast', 'Southeast', 'Midwest', 'West', 'Southwest', 'Northwest']
-cities = {
+# ── Dataset Size Configuration ──────────────────────
+# Uncomment one block at a time, then re-run this cell.
+
+# --- Full dataset (original) ---
+# N_CUSTOMERS        = 5_000
+# N_ACTIVE_CUSTOMERS = 4_500   # customers that actually place orders
+# N_PRODUCTS         = 200
+# N_ORDERS           = 50_000
+# REGIONS    = ['Northeast', 'Southeast', 'Midwest', 'West', 'Southwest', 'Northwest']
+# CATEGORIES = ['Electronics', 'Clothing', 'Books', 'Home & Kitchen', 'Sports', 'Toys']
+# CITIES = {
+#     'Northeast': ['New York', 'Boston', 'Philadelphia', 'Hartford'],
+#     'Southeast': ['Miami', 'Atlanta', 'Charlotte', 'Orlando'],
+#     'Midwest':   ['Chicago', 'Detroit', 'Minneapolis', 'Columbus'],
+#     'West':      ['Los Angeles', 'San Francisco', 'San Diego', 'Portland'],
+#     'Southwest': ['Houston', 'Dallas', 'Phoenix', 'San Antonio'],
+#     'Northwest': ['Seattle', 'Boise', 'Spokane', 'Eugene'],
+# }
+
+# --- Toy dataset (use this to trace examples by hand) ---
+N_CUSTOMERS        = 5
+N_ACTIVE_CUSTOMERS = 4   # customers that actually place orders
+N_PRODUCTS         = 5
+N_ORDERS           = 6
+REGIONS    = ['Northeast', 'Southeast']
+CATEGORIES = ['Electronics', 'Clothing']
+CITIES = {
     'Northeast': ['New York', 'Boston', 'Philadelphia', 'Hartford'],
     'Southeast': ['Miami', 'Atlanta', 'Charlotte', 'Orlando'],
-    'Midwest': ['Chicago', 'Detroit', 'Minneapolis', 'Columbus'],
-    'West': ['Los Angeles', 'San Francisco', 'San Diego', 'Portland'],
-    'Southwest': ['Houston', 'Dallas', 'Phoenix', 'San Antonio'],
-    'Northwest': ['Seattle', 'Boise', 'Spokane', 'Eugene'],
 }
+```
 
+```python
+# --- Customers ---
 customers = []
-for i in range(1, 5001):
-    region = random.choice(regions)
-    city = random.choice(cities[region])
+for i in range(1, N_CUSTOMERS + 1):
+    region = random.choice(REGIONS)
+    city = random.choice(CITIES[region])
     signup = date(2021, 1, 1) + timedelta(days=random.randint(0, 1460))
     customers.append({
         'id': i,
@@ -94,11 +119,10 @@ for i in range(1, 5001):
         'signup_date': signup,
     })
 
-# --- Products (200 rows) ---
-categories = ['Electronics', 'Clothing', 'Books', 'Home & Kitchen', 'Sports', 'Toys']
+# --- Products ---
 products = []
-for i in range(1, 201):
-    cat = categories[(i - 1) % len(categories)]
+for i in range(1, N_PRODUCTS + 1):
+    cat = CATEGORIES[(i - 1) % len(CATEGORIES)]
     price = round(random.uniform(5.0, 500.0), 2)
     products.append({
         'id': i,
@@ -107,13 +131,13 @@ for i in range(1, 201):
         'price': price,
     })
 
-# --- Orders (50,000 rows) ---
-ordering_customers = random.sample(range(1, 5001), 4500)
+# --- Orders ---
+ordering_customers = random.sample(range(1, N_CUSTOMERS + 1), N_ACTIVE_CUSTOMERS)
 statuses = ['completed', 'completed', 'completed', 'completed',
             'pending', 'cancelled']
 
 orders = []
-for i in range(1, 50001):
+for i in range(1, N_ORDERS + 1):
     cust_id = random.choice(ordering_customers)
     order_date = date(2023, 1, 1) + timedelta(days=random.randint(0, 730))
     status = random.choice(statuses)
@@ -124,12 +148,12 @@ for i in range(1, 50001):
         'status': status,
     })
 
-# --- Order Items (120,000+ rows) ---
+# --- Order Items ---
 order_items = []
 item_id = 1
 for order in orders:
-    num_items = random.randint(1, 5)
-    chosen_products = random.sample(range(1, 201), num_items)
+    num_items = random.randint(1, min(5, N_PRODUCTS))
+    chosen_products = random.sample(range(1, N_PRODUCTS + 1), num_items)
     for prod_id in chosen_products:
         prod = products[prod_id - 1]
         qty = random.randint(1, 4)
@@ -753,19 +777,6 @@ ORDER BY month
 
 ---
 
-## Cleanup
-
-```python
-# Remove generated files
-import shutil
-if os.path.exists('ecommerce'):
-    shutil.rmtree('ecommerce')
-
-print("Cleanup complete!")
-```
-
----
-
 ## Summary
 
 In this lab, you applied window functions to the ShopStream e-commerce dataset:
@@ -783,7 +794,3 @@ In this lab, you applied window functions to the ShopStream e-commerce dataset:
 - **ROW_NUMBER for Top-N** — guarantees exactly N rows per group (use CTE to filter)
 - **`SUM(SUM(...)) OVER`** — the essential pattern for combining GROUP BY with window functions
 - **Frame clauses** control the window — from running totals to moving averages
-
-**What's Next:**
-
-In **Lesson 14**, you'll learn **CTEs and offset functions** (LEAD/LAG) — building year-over-year growth comparisons, moving averages, and executive dashboard queries that combine everything from Weeks 06–07.
