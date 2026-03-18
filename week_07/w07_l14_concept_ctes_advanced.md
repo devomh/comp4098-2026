@@ -107,13 +107,14 @@ Multiple CTEs are separated by commas after a single `WITH` keyword. Each CTE ca
 ```sql
 WITH
     step_1 AS (
-        SELECT ... FROM raw_table
+        SELECT ... FROM raw_table       -- independent
     ),
     step_2 AS (
-        SELECT ... FROM step_1  -- references step_1
+        SELECT ... FROM other_table     -- also independent
     ),
     step_3 AS (
-        SELECT ... FROM step_2  -- references step_2 (and could reference step_1)
+        SELECT ... FROM step_1          -- references both step_1 and step_2
+        JOIN step_2 ON ...
     )
 SELECT *
 FROM step_3;
@@ -124,9 +125,11 @@ FROM step_3;
 ```mermaid
 graph LR
     A["Raw Tables"] --> B["CTE 1:<br/>Aggregate"]
-    B --> C["CTE 2:<br/>Transform"]
-    C --> D["CTE 3:<br/>Enrich"]
+    A --> C["CTE 2:<br/>Transform"]
+    B --> D["CTE 3:<br/>Enrich"]
+    C --> D
     D --> E["Final SELECT:<br/>Filter & Sort"]
+    B --> E
 ```
 
 ### Rules for Chaining
@@ -243,9 +246,9 @@ graph TD
         R2["Feb: $120K<br/>LAG → $100K"]
         R3["Mar: $90K<br/>LAG → $120K"]
         R4["Apr: $140K<br/>LAG → $90K"]
-        R1 -->|"offset 1"| R2
-        R2 -->|"offset 1"| R3
-        R3 -->|"offset 1"| R4
+        R1 --- |"offset 1"| R2 
+        R2 --- |"offset 1"| R3
+        R3 --- |"offset 1"| R4
     end
 ```
 
@@ -399,7 +402,7 @@ Both DuckDB and PostgreSQL support `WITH RECURSIVE`.
 
 ```sql
 -- Self-join approach (avoid this)
-SELECT a.month, a.revenue, b.revenue AS prev_month
+SELECT m1.month, m1.revenue, m2.revenue AS prev_month
 FROM monthly m1
 JOIN monthly m2 ON m2.month = m1.month - INTERVAL '1 month';
 
@@ -440,10 +443,6 @@ In this lesson, you learned:
 - **LEAD/LAG:** Offset functions that access previous or next rows without self-joins
 - **Year-Over-Year Growth:** LAG(value, 12) compares each month to the same month in the prior year
 - **Moving Averages:** Frame clauses + CTEs for smoothed trend lines (3-month trailing, centered, 6-month)
-
-**Next:** In [Lesson 14 Lab](w07_l14_lab_yoy_growth.md), you'll build a complete analytical pipeline: monthly trends, month-over-month change, year-over-year growth, moving averages, and an executive dashboard — all using CTEs and offset functions on the ShopStream dataset.
-
-Then in **Week 08**, you'll **benchmark** these analytical queries against both PostgreSQL and DuckDB to see how OLTP and OLAP engines handle window functions and CTEs differently.
 
 ---
 

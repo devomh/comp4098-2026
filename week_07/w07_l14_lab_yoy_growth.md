@@ -29,10 +29,13 @@ Run this setup block first to install required packages.
 
 ```python
 # Setup: Run this cell first (required for Colab)
-!pip install -q duckdb pandas mermaid-py
+!pip install -q duckdb pandas mermaid-py matplotlib
+```
 
+```python
 import duckdb
 import pandas as pd
+import matplotlib.pyplot as plt
 import random
 import os
 from datetime import date, timedelta
@@ -70,21 +73,44 @@ Same e-commerce dataset as Lessons 11–13 (self-contained for Colab).
 ```python
 random.seed(42)
 
-# --- Customers (5,000 rows, some will have no orders) ---
-regions = ['Northeast', 'Southeast', 'Midwest', 'West', 'Southwest', 'Northwest']
-cities = {
+# ── Dataset Size Configuration ──────────────────────
+# Uncomment one block at a time, then re-run this cell.
+
+# --- Full dataset (original) ---
+# N_CUSTOMERS        = 5_000
+# N_ACTIVE_CUSTOMERS = 4_500   # customers that actually place orders
+# N_PRODUCTS         = 200
+# N_ORDERS           = 50_000
+# REGIONS    = ['Northeast', 'Southeast', 'Midwest', 'West', 'Southwest', 'Northwest']
+# CATEGORIES = ['Electronics', 'Clothing', 'Books', 'Home & Kitchen', 'Sports', 'Toys']
+# CITIES = {
+#     'Northeast': ['New York', 'Boston', 'Philadelphia', 'Hartford'],
+#     'Southeast': ['Miami', 'Atlanta', 'Charlotte', 'Orlando'],
+#     'Midwest':   ['Chicago', 'Detroit', 'Minneapolis', 'Columbus'],
+#     'West':      ['Los Angeles', 'San Francisco', 'San Diego', 'Portland'],
+#     'Southwest': ['Houston', 'Dallas', 'Phoenix', 'San Antonio'],
+#     'Northwest': ['Seattle', 'Boise', 'Spokane', 'Eugene'],
+# }
+
+# --- Toy dataset (use this to trace examples by hand) ---
+N_CUSTOMERS        = 10
+N_ACTIVE_CUSTOMERS = 4   # customers that actually place orders
+N_PRODUCTS         = 20
+N_ORDERS           = 100
+REGIONS    = ['Northeast', 'Southeast']
+CATEGORIES = ['Electronics', 'Clothing']
+CITIES = {
     'Northeast': ['New York', 'Boston', 'Philadelphia', 'Hartford'],
     'Southeast': ['Miami', 'Atlanta', 'Charlotte', 'Orlando'],
-    'Midwest': ['Chicago', 'Detroit', 'Minneapolis', 'Columbus'],
-    'West': ['Los Angeles', 'San Francisco', 'San Diego', 'Portland'],
-    'Southwest': ['Houston', 'Dallas', 'Phoenix', 'San Antonio'],
-    'Northwest': ['Seattle', 'Boise', 'Spokane', 'Eugene'],
 }
+```
 
+```python
+# --- Customers ---
 customers = []
-for i in range(1, 5001):
-    region = random.choice(regions)
-    city = random.choice(cities[region])
+for i in range(1, N_CUSTOMERS + 1):
+    region = random.choice(REGIONS)
+    city = random.choice(CITIES[region])
     signup = date(2021, 1, 1) + timedelta(days=random.randint(0, 1460))
     customers.append({
         'id': i,
@@ -94,11 +120,10 @@ for i in range(1, 5001):
         'signup_date': signup,
     })
 
-# --- Products (200 rows) ---
-categories = ['Electronics', 'Clothing', 'Books', 'Home & Kitchen', 'Sports', 'Toys']
+# --- Products ---
 products = []
-for i in range(1, 201):
-    cat = categories[(i - 1) % len(categories)]
+for i in range(1, N_PRODUCTS + 1):
+    cat = CATEGORIES[(i - 1) % len(CATEGORIES)]
     price = round(random.uniform(5.0, 500.0), 2)
     products.append({
         'id': i,
@@ -107,13 +132,13 @@ for i in range(1, 201):
         'price': price,
     })
 
-# --- Orders (50,000 rows) ---
-ordering_customers = random.sample(range(1, 5001), 4500)
+# --- Orders ---
+ordering_customers = random.sample(range(1, N_CUSTOMERS + 1), N_ACTIVE_CUSTOMERS)
 statuses = ['completed', 'completed', 'completed', 'completed',
             'pending', 'cancelled']
 
 orders = []
-for i in range(1, 50001):
+for i in range(1, N_ORDERS + 1):
     cust_id = random.choice(ordering_customers)
     order_date = date(2023, 1, 1) + timedelta(days=random.randint(0, 730))
     status = random.choice(statuses)
@@ -124,12 +149,12 @@ for i in range(1, 50001):
         'status': status,
     })
 
-# --- Order Items (120,000+ rows) ---
+# --- Order Items ---
 order_items = []
 item_id = 1
 for order in orders:
-    num_items = random.randint(1, 5)
-    chosen_products = random.sample(range(1, 201), num_items)
+    num_items = random.randint(1, min(5, N_PRODUCTS))
+    chosen_products = random.sample(range(1, N_PRODUCTS + 1), num_items)
     for prod_id in chosen_products:
         prod = products[prod_id - 1]
         qty = random.randint(1, 4)
@@ -222,6 +247,21 @@ result.show()
 
 </details>
 
+**Visualize it:** A line chart makes the trend immediately visible — are revenues climbing, flat, or seasonal?
+
+```python
+df = result.df()
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(df['month'], df['revenue'], marker='o', linewidth=2, color='#2c3e50')
+ax.set_title('Monthly Revenue (2023–2024)')
+ax.set_ylabel('Revenue ($)')
+ax.grid(True, alpha=0.3)
+fig.autofmt_xdate()
+plt.tight_layout()
+plt.show()
+```
+
 This CTE will be reused (copied) into every subsequent step. In a production database, you might create a view for this.
 
 ---
@@ -277,6 +317,23 @@ result.show()
 (24 rows — first row has NULL for prev_month since there's no prior month)
 
 </details>
+
+**Visualize it:** Green bars = growth, red bars = decline. This makes it easy to spot volatile months at a glance.
+
+```python
+df = result.df().dropna(subset=['mom_growth_pct'])
+
+colors = ['#2ecc71' if x >= 0 else '#e74c3c' for x in df['mom_growth_pct']]
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.bar(df['month'], df['mom_growth_pct'], color=colors, width=20)
+ax.axhline(y=0, color='black', linewidth=0.8)
+ax.set_title('Month-over-Month Revenue Growth (%)')
+ax.set_ylabel('MoM Growth (%)')
+ax.grid(True, alpha=0.3, axis='y')
+fig.autofmt_xdate()
+plt.tight_layout()
+plt.show()
+```
 
 **Note:** The first row (Jan 2023) has NULL for `prev_month_revenue` because there is no December 2022 data. This is expected behavior for LAG at the boundary.
 
@@ -391,6 +448,27 @@ result.show()
 
 </details>
 
+**Visualize it:** Overlaying the raw revenue with both moving averages shows the smoothing effect directly — watch how the 6-month line lags behind real changes while the 3-month line tracks more closely.
+
+```python
+df = result.df()
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(df['month'], df['revenue'], marker='o', linewidth=1, alpha=0.4,
+        label='Monthly Revenue', color='#95a5a6')
+ax.plot(df['month'], df['ma_3m'], linewidth=2,
+        label='3-Month MA', color='#e67e22')
+ax.plot(df['month'], df['ma_6m'], linewidth=2,
+        label='6-Month MA', color='#2980b9')
+ax.set_title('Revenue vs. Moving Averages')
+ax.set_ylabel('Revenue ($)')
+ax.legend()
+ax.grid(True, alpha=0.3)
+fig.autofmt_xdate()
+plt.tight_layout()
+plt.show()
+```
+
 **Smoothing vs lag tradeoff:** The 3-month average reacts faster to trends but is noisier. The 6-month average is smoother but lags behind real changes. For financial reporting, 3-month is most common; for strategic planning, 6-month gives a cleaner signal.
 
 ---
@@ -432,7 +510,6 @@ result = duckdb.sql("""
     FROM category_yoy
     WHERE prior_year_revenue IS NOT NULL
     ORDER BY category, month
-    LIMIT 18
 """)
 result.show()
 ```
@@ -454,9 +531,29 @@ result.show()
 └────────────┴────────────┴─────────────────┴────────────────────┴─────────────────┘
 ~~~
 
-(Showing first 18 of 72 rows — 12 months × 6 categories for 2024)
+(12 months × 6 categories for 2024 — DuckDB truncates the display for readability)
 
 </details>
+
+**Visualize it:** One line per category reveals which are growing vs. declining — patterns invisible in a 72-row table.
+
+```python
+df_cat = result.df()
+
+fig, ax = plt.subplots(figsize=(10, 5))
+for cat in df_cat['category'].unique():
+    subset = df_cat[df_cat['category'] == cat]
+    ax.plot(subset['month'], subset['yoy_growth_pct'],
+            marker='o', linewidth=1.5, label=cat)
+ax.axhline(y=0, color='black', linewidth=0.8, linestyle='--')
+ax.set_title('Year-over-Year Growth by Category (%)')
+ax.set_ylabel('YoY Growth (%)')
+ax.legend(loc='best', fontsize=9)
+ax.grid(True, alpha=0.3)
+fig.autofmt_xdate()
+plt.tight_layout()
+plt.show()
+```
 
 **Key insight:** `PARTITION BY category` makes LAG(12) operate independently per category. Each category's January 2024 is compared to its own January 2023, not to another category's data.
 
@@ -526,6 +623,49 @@ result.show()
 (12 rows — complete 2024 executive dashboard)
 
 </details>
+
+**Visualize it:** A multi-panel figure mirrors what a real executive dashboard looks like.
+
+```python
+df = result.df()
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+# Top-left: Revenue with 3-month moving average
+axes[0, 0].plot(df['month'], df['revenue'], marker='o', linewidth=1.5, label='Revenue')
+axes[0, 0].plot(df['month'], df['moving_avg_3m'], linewidth=2, linestyle='--', label='3M MA')
+axes[0, 0].set_title('Revenue & Moving Average')
+axes[0, 0].legend(fontsize=8)
+axes[0, 0].grid(True, alpha=0.3)
+axes[0, 0].tick_params(axis='x', rotation=45)
+
+# Top-right: Month-over-month growth
+colors_mom = ['#2ecc71' if x >= 0 else '#e74c3c' for x in df['mom_pct']]
+axes[0, 1].bar(df['month'], df['mom_pct'], color=colors_mom, width=20)
+axes[0, 1].axhline(y=0, color='black', linewidth=0.8)
+axes[0, 1].set_title('Month-over-Month (%)')
+axes[0, 1].grid(True, alpha=0.3, axis='y')
+axes[0, 1].tick_params(axis='x', rotation=45)
+
+# Bottom-left: Year-over-year growth
+colors_yoy = ['#2ecc71' if x >= 0 else '#e74c3c' for x in df['yoy_pct']]
+axes[1, 0].bar(df['month'], df['yoy_pct'], color=colors_yoy, width=20)
+axes[1, 0].axhline(y=0, color='black', linewidth=0.8)
+axes[1, 0].set_title('Year-over-Year (%)')
+axes[1, 0].grid(True, alpha=0.3, axis='y')
+axes[1, 0].tick_params(axis='x', rotation=45)
+
+# Bottom-right: Revenue rank
+df_sorted = df.sort_values('revenue_rank')
+axes[1, 1].barh(df_sorted['month'].dt.strftime('%b %Y'), df_sorted['revenue'],
+                color='#3498db')
+axes[1, 1].set_title('Months Ranked by Revenue')
+axes[1, 1].invert_yaxis()
+
+fig.suptitle('2024 Executive Dashboard', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+```
 
 **What makes this powerful:** Three chained CTEs build a pipeline:
 1. `monthly_revenue` — aggregates raw data into monthly totals
@@ -624,17 +764,21 @@ WITH category_monthly AS (
     JOIN products AS p ON oi.product_id = p.id
     WHERE o.status = 'completed'
     GROUP BY p.category, DATE_TRUNC('month', o.order_date)
+),
+with_ma AS (
+    SELECT
+        category,
+        month,
+        revenue,
+        ROUND(AVG(revenue) OVER (
+            PARTITION BY category
+            ORDER BY month
+            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+        ), 2) AS ma_3m
+    FROM category_monthly
 )
-SELECT
-    category,
-    month,
-    revenue,
-    ROUND(AVG(revenue) OVER (
-        PARTITION BY category
-        ORDER BY month
-        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-    ), 2) AS ma_3m
-FROM category_monthly
+SELECT *
+FROM with_ma
 WHERE month >= '2024-01-01'
 ORDER BY category, month
 ~~~
@@ -801,19 +945,6 @@ ORDER BY yoy_growth_pct DESC
 
 ---
 
-## Cleanup
-
-```python
-# Remove generated files
-import shutil
-if os.path.exists('ecommerce'):
-    shutil.rmtree('ecommerce')
-
-print("Cleanup complete!")
-```
-
----
-
 ## Summary
 
 In this lab, you built a complete time-series analytics pipeline using CTEs and offset functions:
@@ -831,7 +962,3 @@ In this lab, you built a complete time-series analytics pipeline using CTEs and 
 - **PARTITION BY with LAG** — each group gets its own independent offset computation
 - **Frame clauses control moving averages** — 3-month trailing is the business standard
 - **Chained CTEs + window functions** — the complete toolkit for time-series SQL analytics
-
-**What's Next:**
-
-In **Week 08**, you'll **benchmark** these analytical patterns — running the same window function and CTE queries against PostgreSQL (OLTP) and DuckDB (OLAP) to see how columnar vs. row-based engines handle analytical workloads differently.
