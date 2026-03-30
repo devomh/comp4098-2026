@@ -161,10 +161,10 @@ CREATE TABLE sales_transactions (
     category         VARCHAR(20) NOT NULL,
     quantity         INTEGER NOT NULL,
     unit_price       NUMERIC(10, 2) NOT NULL,
-    total_amount     NUMERIC(12, 2) NOT NULL,
     region           VARCHAR(20) NOT NULL,
     store_id         INTEGER NOT NULL,
-    payment_method   VARCHAR(20) NOT NULL
+    payment_method   VARCHAR(20) NOT NULL,
+    total_amount     NUMERIC(12, 2) NOT NULL
 );
 ```
 
@@ -619,13 +619,14 @@ In Step 6, you saw PostgreSQL's plans with `EXPLAIN ANALYZE`. Now let's see the 
 
 ```python
 # DuckDB's EXPLAIN ANALYZE for the same GROUP BY query
-duckdb.sql("""
+result = duckdb.sql("""
     EXPLAIN ANALYZE
     SELECT category, COUNT(*), SUM(total_amount)
     FROM sales_transactions
     GROUP BY category
     ORDER BY SUM(total_amount) DESC
-""").show()
+""")
+print(result.fetchone()[1])
 ```
 
 <details>
@@ -673,13 +674,14 @@ Execution Time: ~1500 ms                    Execution Time: ~50-100 ms
 ### DuckDB Plan for Filtered Query
 
 ```python
-duckdb.sql("""
+result = duckdb.sql("""
     EXPLAIN ANALYZE
     SELECT COUNT(*), SUM(total_amount)
     FROM sales_transactions
     WHERE category = 'Electronics'
       AND transaction_date >= '2024-01-01'
-""").show()
+""")
+print(result.fetchone()[1])
 ```
 
 <details>
