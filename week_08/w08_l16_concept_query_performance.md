@@ -89,6 +89,7 @@ This tells you:
 *   **HashAggregate** — It will group results using a hash table in memory
 *   **cost=0.00..87654.00** — Estimated cost in arbitrary units (startup cost..total cost)
 *   **rows=5000000** — Estimated number of rows to process
+*   **width=28** — Estimated average size (in bytes) of each output row; the planner uses this together with `rows` to estimate memory needed for operations like sorting or hashing
 
 ### EXPLAIN ANALYZE — The Plan With Actual Metrics
 
@@ -128,7 +129,7 @@ Now you see **actual time** (in milliseconds), **actual rows**, and total **Exec
 ### Common Query Plan Nodes
 
 ```mermaid
-graph TD
+graph LR
     A[Query Plan Nodes] --> B[Scan Nodes]
     A --> C[Join Nodes]
     A --> D[Other Nodes]
@@ -152,7 +153,7 @@ graph TD
 | **Index Scan** | Index exists and query is selective (few rows match) | Fast for lookups; slower than Seq Scan when many rows match |
 | **Hash Join** | Joining two tables when one fits in memory | Good for medium-sized joins |
 | **HashAggregate** | GROUP BY with few distinct groups | Fast — builds hash table once |
-| **Sort** | ORDER BY or Merge Join input | Can spill to disk if data exceeds `work_mem` |
+| **Sort** | ORDER BY or Merge Join input | Can spill to disk if data exceeds `work_mem`. If a B-tree index exists on the sort column, PostgreSQL may use an Index Scan instead, returning rows already in order and skipping this node entirely |
 
 ---
 
@@ -182,16 +183,19 @@ Consider: `SELECT category, SUM(total_amount) FROM sales_transactions GROUP BY c
 **DuckDB (column-oriented):**
 1.  Reads only the `category` and `total_amount` columns from storage
 2.  For 5M rows × ~12 bytes (just 2 columns) = **~60 MB of I/O**
-3.  Processes values in compressed, vectorized batches of 2,048
+3.  Processes values in compressed, vectorized batches of 2,048 rows at a time
 4.  Aggregates using vectorized operations
 
 ```mermaid
-graph LR
+graph TB
     subgraph "Row Store — PostgreSQL"
         R1["Read ALL 11 columns<br/>~500 MB I/O"] --> R2["Extract 2<br/>needed columns"]
         R2 --> R3["Aggregate<br/>row by row"]
     end
+```
 
+```mermaid
+graph TB
     subgraph "Column Store — DuckDB"
         C1["Read 2 columns<br/>~60 MB I/O"] --> C2["Decompress &<br/>vectorize"]
         C2 --> C3["Aggregate<br/>in batches"]

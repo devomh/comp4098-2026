@@ -63,6 +63,7 @@ warnings.filterwarnings('ignore')
 %config SqlMagic.autocommit = True
 %config SqlMagic.feedback = False
 %config SqlMagic.displaycon = False
+%config SqlMagic.displaylimit = 30
 %sql postgresql://postgres:postgres@localhost:5432/benchmark_db
 
 print("Setup complete!")
@@ -171,8 +172,14 @@ CREATE TABLE sales_transactions (
 print("Loading into PostgreSQL (COPY)...")
 start = time.perf_counter()
 
-!sudo -u postgres psql -d benchmark_db \
-  -c "\COPY sales_transactions FROM '/content/benchmark_data/sales_transactions.csv' WITH (FORMAT csv, HEADER true)"
+pg_conn = psycopg2.connect("dbname=benchmark_db user=postgres password=postgres host=localhost")
+cur = pg_conn.cursor()
+with open('benchmark_data/sales_transactions.csv', 'r') as f:
+    next(f)  # skip header
+    cur.copy_expert("COPY sales_transactions FROM STDIN WITH (FORMAT csv)", f)
+pg_conn.commit()
+cur.close()
+pg_conn.close()
 
 pg_load = time.perf_counter() - start
 print(f"PostgreSQL: {pg_load:.1f}s")
@@ -253,7 +260,7 @@ def benchmark_query(query, label, n_runs=3):
         'query':        label,
         'pg_seconds':   round(pg_median, 4),
         'duck_seconds': round(duck_median, 4),
-        'speedup':      round(speedup, 1),
+        'speedup':      round(speedup, 2),
     }
 ```
 
@@ -505,34 +512,21 @@ Exact numbers vary by Colab instance. The pattern should be consistent: DuckDB i
 ## Step 5: Visualize the Results
 
 ```python
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, ax = plt.subplots(figsize=(8, 5))
 
-# ── Left panel: Side-by-side execution times (log scale) ──
 x = range(len(results_df))
 width = 0.35
 
-axes[0].bar([i - width/2 for i in x], results_df['pg_seconds'],
-            width, label='PostgreSQL', color='#336791')
-axes[0].bar([i + width/2 for i in x], results_df['duck_seconds'],
-            width, label='DuckDB', color='#FFC107')
-axes[0].set_xlabel('Query')
-axes[0].set_ylabel('Execution Time (seconds) — log scale')
-axes[0].set_title('PostgreSQL vs DuckDB — Execution Time')
-axes[0].set_xticks(x)
-axes[0].set_xticklabels(results_df['query'], rotation=45, ha='right')
-axes[0].legend()
-axes[0].set_yscale('log')
-
-# ── Right panel: Speedup factor ──
-colors = ['#4CAF50' if s >= 20 else '#FF9800' if s >= 10 else '#f44336'
-          for s in results_df['speedup']]
-bars = axes[1].barh(results_df['query'], results_df['speedup'], color=colors)
-axes[1].set_xlabel('DuckDB Speedup (x times faster)')
-axes[1].set_title('DuckDB Speedup Factor')
-axes[1].axvline(x=1, color='black', linestyle='--', linewidth=0.8)
-
-for i, v in enumerate(results_df['speedup']):
-    axes[1].text(v + 0.5, i, f'{v}x', va='center', fontweight='bold')
+ax.bar([i - width/2 for i in x], results_df['pg_seconds'],
+       width, label='PostgreSQL', color='#336791')
+ax.bar([i + width/2 for i in x], results_df['duck_seconds'],
+       width, label='DuckDB', color='#FFC107')
+ax.set_xlabel('Query')
+ax.set_ylabel('Execution Time (seconds)')
+ax.set_title('PostgreSQL vs DuckDB — Execution Time')
+ax.set_xticks(x)
+ax.set_xticklabels(results_df['query'], rotation=45, ha='right')
+ax.legend()
 
 plt.tight_layout()
 plt.savefig('benchmark_results.png', dpi=150, bbox_inches='tight')
@@ -543,9 +537,7 @@ print("Chart saved to benchmark_results.png")
 <details>
 <summary>Expected Output</summary>
 
-A two-panel chart:
-- **Left:** Side-by-side bar chart on a log scale — PostgreSQL bars are dramatically taller than DuckDB bars
-- **Right:** Horizontal bar chart showing DuckDB speedup factors (10–50x range), color-coded green (20x+), orange (10–20x), red (<10x)
+A side-by-side bar chart — PostgreSQL bars are dramatically taller than DuckDB bars for analytical queries. DuckDB bars may be barely visible, which is the point.
 
 </details>
 
@@ -928,23 +920,20 @@ ORDER BY revenue DESC;
 - Reset with `SET work_mem = '4MB';` when done
 
 ```python
-%%sql
--- TODO: SET work_mem = '1MB'
--- TODO: Run EXPLAIN ANALYZE on the Multi-Dim GROUP BY query (q4)
--- TODO: Note the Sort Method
+# TODO: SET work_mem = '1MB'
+# TODO: Run EXPLAIN ANALYZE on the Multi-Dim GROUP BY query (q4)
+# TODO: Note the Sort Method
 ```
 
 ```python
-%%sql
--- TODO: SET work_mem = '256MB'
--- TODO: Run the same EXPLAIN ANALYZE
--- TODO: Compare Sort Method and execution time
+# TODO: SET work_mem = '256MB'
+# TODO: Run the same EXPLAIN ANALYZE
+# TODO: Compare Sort Method and execution time
 ```
 
 ```python
-%%sql
--- TODO: Reset work_mem to default
--- SET work_mem = '4MB';
+# TODO: Reset work_mem to default
+# SET work_mem = '4MB';
 ```
 
 <details>
@@ -993,29 +982,25 @@ The key difference: `external merge Disk` means PostgreSQL ran out of memory and
 **Task:** Check whether PostgreSQL's row count estimates are accurate after the bulk load. If they're stale, run `ANALYZE` and see how the estimates improve.
 
 ```python
-%%sql
--- TODO: Check estimated vs actual row counts
--- SELECT relname, reltuples::bigint AS estimated_rows,
---        (SELECT COUNT(*) FROM sales_transactions) AS actual_rows
--- FROM pg_class WHERE relname = 'sales_transactions';
+# TODO: Check estimated vs actual row counts
+# SELECT relname, reltuples::bigint AS estimated_rows,
+#        (SELECT COUNT(*) FROM sales_transactions) AS actual_rows
+# FROM pg_class WHERE relname = 'sales_transactions';
 ```
 
 ```python
-%%sql
--- TODO: Run EXPLAIN (not ANALYZE) and note the rows= estimate
--- EXPLAIN SELECT category, COUNT(*) FROM sales_transactions
--- WHERE category = 'Electronics' GROUP BY category;
+# TODO: Run EXPLAIN (not ANALYZE) and note the rows= estimate
+# EXPLAIN SELECT category, COUNT(*) FROM sales_transactions
+# WHERE category = 'Electronics' GROUP BY category;
 ```
 
 ```python
-%%sql
--- TODO: Update statistics
--- ANALYZE sales_transactions;
+# TODO: Update statistics
+# ANALYZE sales_transactions;
 ```
 
 ```python
-%%sql
--- TODO: Re-run EXPLAIN and compare the rows= estimate
+# TODO: Re-run EXPLAIN and compare the rows= estimate
 ```
 
 <details>
@@ -1306,6 +1291,49 @@ The main benchmark uses a flat synthetic table — intentional for isolating eng
 
 **Note:** This activity requires downloading ~45 MB from the internet. If the download fails (network issues on Colab), you can skip it — the main benchmark (Steps 1–10) is complete with locally generated data.
 
+```python
+from mermaid import Mermaid
+
+Mermaid("""
+erDiagram
+    trips ||--o{ zones : "PULocationID → LocationID"
+    trips ||--o{ zones : "DOLocationID → LocationID"
+    trips ||--o{ rate_codes : "RatecodeID"
+    trips ||--o{ payment_types : "payment_type"
+
+    trips {
+        INTEGER VendorID
+        TIMESTAMP tpep_pickup_datetime
+        TIMESTAMP tpep_dropoff_datetime
+        FLOAT passenger_count
+        FLOAT trip_distance
+        FLOAT RatecodeID FK
+        INTEGER PULocationID FK
+        INTEGER DOLocationID FK
+        INTEGER payment_type FK
+        FLOAT fare_amount
+        FLOAT total_amount
+    }
+
+    zones {
+        INTEGER LocationID PK
+        TEXT Borough
+        TEXT Zone
+        TEXT service_zone
+    }
+
+    rate_codes {
+        INTEGER RatecodeID PK
+        TEXT rate_description
+    }
+
+    payment_types {
+        INTEGER payment_type PK
+        TEXT payment_description
+    }
+""")
+```
+
 ### Download the Data
 
 ```python
@@ -1452,8 +1480,14 @@ CREATE TABLE payment_types (
 # Load via COPY
 print("Loading trips into PostgreSQL...")
 start = time.perf_counter()
-!sudo -u postgres psql -d benchmark_db \
-  -c "\COPY trips FROM '/content/taxi_data/trips.csv' WITH (FORMAT csv, HEADER true)"
+pg_conn = psycopg2.connect("dbname=benchmark_db user=postgres password=postgres host=localhost")
+cur = pg_conn.cursor()
+with open('taxi_data/trips.csv', 'r') as f:
+    next(f)  # skip header
+    cur.copy_expert("COPY trips FROM STDIN WITH (FORMAT csv)", f)
+pg_conn.commit()
+cur.close()
+pg_conn.close()
 pg_taxi_time = time.perf_counter() - start
 print(f"Trips loaded in {pg_taxi_time:.1f}s")
 
