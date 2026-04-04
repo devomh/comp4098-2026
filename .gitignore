@@ -2,3 +2,6 @@
 _original_docs/
 _tmp/
 _assignments/
+
+# Auxiliary files
+.notes.md
