@@ -84,7 +84,7 @@ YAML frontmatter required (`type: challenge`). Sections: Scenario → Dataset �
 
 ---
 
-## Progress (as of 2026-03-07)
+## Progress (as of 2026-04-04)
 
 | Week | Lessons | Status |
 | :--- | :--- | :--- |
@@ -96,9 +96,12 @@ YAML frontmatter required (`type: challenge`). Sections: Scenario → Dataset �
 | week_06 | L11 (Complex Joins), L12 (Aggregation & Grouping) | ✅ Complete |
 | week_07 | L13 (Window Functions), L14 (CTEs & Advanced Analytics) | ✅ Complete |
 | week_08 | L15 (Data at Scale), L16 (Performance Benchmark) | ✅ Complete |
-| week_09+ | L17–L30 | ❌ Not started |
+| week_09 | L17 (CAP Theorem & Document Model), L18 (Document Stores / MongoDB) | ✅ Complete |
+| week_10 | L19 (MongoDB Essentials), L20 (Aggregation Pipeline) | ✅ Complete |
+| week_11 | L21 (Redis & Key-Value Stores), L22 (Data Security & Connectivity) | ✅ Complete |
+| week_12+ | L23–L30 | ❌ Not started |
 
-**Next up:** Week 09 — L17 (CAP Theorem) + L18 (Document Stores / MongoDB) · Module 3
+**Next up:** Week 12 — L23 (DAL Architecture & Connectivity) + L24 (DAO/ORM with SQLAlchemy) · Module 4
 
 ---
 

@@ -84,6 +84,39 @@ MongoDB supports two deployment models:
 
 In this course, we run MongoDB **locally inside Google Colab** — this keeps everything self-contained and free, with no account setup required. The `pymongo` code you write works identically against a local or Atlas instance; only the connection string changes.
 
+### 3.4 Production Reality: Replica Sets
+
+A single `mongod` is fine for development, but **no production system runs a lone server**. MongoDB's standard deployment unit is the **replica set** — a group of `mongod` processes that maintain the same data:
+
+```mermaid
+graph LR
+    CLIENT["pymongo Driver"] -->|reads & writes| P["Primary"]
+    P -->|replication| S1["Secondary 1"]
+    P -->|replication| S2["Secondary 2"]
+
+    style P fill:#4DB33D,color:white
+    style S1 fill:#888,color:white
+    style S2 fill:#888,color:white
+```
+
+| Role | Responsibility |
+| :--- | :--- |
+| **Primary** | Receives all writes; the only node that accepts `insert`, `update`, `delete` |
+| **Secondaries** | Replicate data from the primary asynchronously; can serve read queries if configured |
+| **Automatic failover** | If the primary goes down, secondaries hold an election and promote a new primary — typically within 10 seconds |
+
+**Why this matters for your CRUD code:** it doesn't change. The `pymongo` driver is replica-set-aware — it discovers all members from the connection string and automatically redirects writes to the current primary. The only visible difference is the connection string, which lists multiple hosts:
+
+```python
+# Single server (our labs)
+client = MongoClient("mongodb://localhost:27017/")
+
+# Replica set (production)
+client = MongoClient("mongodb://host1:27017,host2:27017,host3:27017/?replicaSet=myRS")
+```
+
+> **For this course** we use a single local `mongod`. Everything you learn — CRUD operations, aggregation, indexing — applies unchanged to replica sets and sharded clusters.
+
 ### Key Takeaway
 *   MongoDB follows a familiar client-server model — `pymongo` talks to `mongod` just like `psycopg2` talks to `postgres`
 *   Databases contain collections, collections contain documents — no schema enforcement by default
@@ -140,6 +173,16 @@ print(result.inserted_ids)  # [ObjectId('...'), ObjectId('...')]
 | `{"price": {"$lte": 100}}` | `WHERE price <= 100` | Less than or equal |
 | `{"category": {"$in": ["Electronics", "Office"]}}` | `WHERE category IN (...)` | Match any in list |
 | `{"price": {"$ne": 0}}` | `WHERE price != 0` | Not equal |
+
+**Logical operators** combine conditions — `$and`, `$or`, and `$not`:
+
+| MongoDB Filter | SQL Equivalent |
+| :--- | :--- |
+| `{"$and": [{"price": {"$gt": 10}}, {"price": {"$lt": 100}}]}` | `WHERE price > 10 AND price < 100` |
+| `{"$or": [{"category": "Electronics"}, {"price": {"$lt": 5}}]}` | `WHERE category = 'Electronics' OR price < 5` |
+| `{"price": {"$not": {"$gt": 100}}}` | `WHERE NOT (price > 100)` |
+
+> **Tip:** Multiple keys in one dictionary act as an implicit AND: `{"price": {"$gt": 10}, "category": "Electronics"}`. Use explicit `$and` only when you need two conditions on the **same field**.
 
 ```python
 # Find one document
@@ -229,7 +272,11 @@ collection.find({}, {"name": 1, "price": 1, "_id": 0})
 collection.find({}, {"specs": 0})
 ```
 
-Rules: `1` = include, `0` = exclude. You cannot mix includes and excludes in the same projection (except `_id`, which can always be excluded).
+Rules — you must pick **one mode** per projection:
+*   **Include mode** (`1`): you list the fields you want — everything else is excluded automatically
+*   **Exclude mode** (`0`): you list the fields you don't want — everything else is included automatically
+
+You cannot mix includes and excludes in the same projection (except `_id`, which can always be excluded).
 
 **Sorting and limiting** — chain `.sort()` and `.limit()` on the cursor:
 

@@ -27,6 +27,10 @@ By the end of this week, you'll be able to go from a document model design to a 
 **Lab Exercise:**
 - [Lab: MongoDB CRUD Operations](w10_l19_lab_mongodb_crud.md)
 
+### Interactive Notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_10/w10_l19_lab_mongodb_crud.ipynb)
+
 ---
 
 ## Lesson 20: Advanced Document Querying & the Aggregation Pipeline
@@ -47,6 +51,10 @@ By the end of this week, you'll be able to go from a document model design to a 
 
 **Lab Exercise:**
 - [Lab: MongoDB Aggregation Pipeline](w10_l20_lab_aggregation_pipeline.md)
+
+### Interactive Notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_10/w10_l20_lab_aggregation_pipeline.ipynb)
 
 ---
 
