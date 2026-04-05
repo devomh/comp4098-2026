@@ -33,7 +33,7 @@ curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
 echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
   tee /etc/apt/sources.list.d/mongodb-org-7.0.list
 
-apt-get update -qq
+apt-get update -qq 2>/dev/null
 apt-get install -y -qq mongodb-org > /dev/null
 echo "MongoDB installed: $(mongod --version | head -1)"
 ```
@@ -76,7 +76,9 @@ child process started successfully, parent exiting
 ```python
 # Setup: Install pymongo and connect (run Steps 1-2 first)
 !pip install -q pymongo
+```
 
+```python
 from pymongo import MongoClient, ASCENDING, DESCENDING
 import json
 
@@ -92,6 +94,8 @@ products = db["products"]
 print(f"Connected to MongoDB {client.server_info()['version']}")
 print(f"Database: {db.name}")
 ```
+
+> **Note:** `client["store_db"]` and `db["products"]` only *reference* the database and collection — MongoDB creates them lazily on the first write (e.g., `insert_one`). No explicit `CREATE DATABASE` or `CREATE TABLE` step is needed.
 
 <details>
 <summary>Expected Output</summary>
@@ -398,7 +402,7 @@ Laptop Pro 16 stock: 44 (was 45)
 
 </details>
 
-### $push and $pull — Modify Arrays
+### \$push and \$pull — Modify Arrays
 
 ```python
 # Add a tag to Wireless Mouse
@@ -824,18 +828,6 @@ Update B replaced the *entire* document with just `{"price": 15}`. The `name`, `
 
 ---
 
-## 9. Cleanup
-
-```python
-# Drop the database when done
-client.drop_database("store_db")
-print("Database 'store_db' dropped")
-client.close()
-print("Connection closed")
-```
-
----
-
 ## Summary
 
 In this lab, you:
@@ -846,5 +838,3 @@ In this lab, you:
 *   **Updated** documents using `$set`, `$inc`, `$push`, and `$pull` operators
 *   **Deleted** documents with `delete_one` and `delete_many`
 *   Used **projection** to select specific fields and **sort/limit** to order results
-
-**Next lesson:** You'll go beyond basic CRUD to master advanced querying with logical and array operators, and the powerful **MongoDB Aggregation Pipeline** for analytics.

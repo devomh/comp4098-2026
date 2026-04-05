@@ -67,8 +67,8 @@ graph LR
 | Component | Role | Relational Equivalent |
 | :--- | :--- | :--- |
 | **`mongod`** | The database server process — stores data, handles queries | `postgres` server process |
-| **Database** | A namespace that holds collections | A PostgreSQL database |
-| **Collection** | A group of documents (no enforced schema by default) | A table |
+| **Database** | A namespace that holds collections (created lazily on first write) | A PostgreSQL database |
+| **Collection** | A group of documents, no enforced schema (created lazily on first write) | A table |
 | **Document** | A JSON/BSON object — the unit of data | A row |
 | **`pymongo`** | The official Python driver for MongoDB | `psycopg2` for PostgreSQL |
 | **`mongosh`** | Interactive MongoDB shell (JavaScript-based) | `psql` for PostgreSQL |
@@ -120,6 +120,7 @@ client = MongoClient("mongodb://host1:27017,host2:27017,host3:27017/?replicaSet=
 ### Key Takeaway
 *   MongoDB follows a familiar client-server model — `pymongo` talks to `mongod` just like `psycopg2` talks to `postgres`
 *   Databases contain collections, collections contain documents — no schema enforcement by default
+*   **Lazy creation:** `db = client["store_db"]` and `products = db["products"]` only *reference* the database and collection — MongoDB creates them on disk when you first write data (e.g., `insert_one`). Unlike PostgreSQL, there is no `CREATE DATABASE` or `CREATE TABLE` step
 *   The same Python code works against local and cloud MongoDB — only the connection string differs
 
 ---
@@ -258,7 +259,31 @@ collection.drop()
 | **Update** | `UPDATE products SET price = 899 WHERE name = 'Laptop'` | `db.products.update_one({"name": "Laptop"}, {"$set": {"price": 899}})` |
 | **Delete** | `DELETE FROM products WHERE price = 0` | `db.products.delete_many({"price": 0})` |
 
-### 4.6 Projection, Sorting, and Limiting
+### 4.6 Verifying Writes
+
+Every write method returns a **result object** that confirms what happened on the server:
+
+| Operation | Result Object | Key Fields |
+| :--- | :--- | :--- |
+| `insert_one` | `InsertOneResult` | `acknowledged`, `inserted_id` |
+| `insert_many` | `InsertManyResult` | `acknowledged`, `inserted_ids` |
+| `update_one` / `update_many` | `UpdateResult` | `acknowledged`, `matched_count`, `modified_count` |
+| `delete_one` / `delete_many` | `DeleteResult` | `acknowledged`, `deleted_count` |
+
+*   `acknowledged` — `True` if the server confirmed the write
+*   `matched_count` vs. `modified_count` — a document can match the filter but not be modified if the new value is the same as the existing one
+
+**Write Concern** controls *how durable* the acknowledgment is. By default (`w=1`), the primary confirms the write to memory. For stronger guarantees:
+
+| Write Concern | Guarantee |
+| :--- | :--- |
+| `w=1` (default) | Primary acknowledged the write |
+| `w="majority"` | A majority of replica set members acknowledged |
+| `j=True` | Write is committed to the on-disk journal before acknowledging |
+
+In L17 you saw that MongoDB lets you [tune consistency via `writeConcern`](../week_09/w09_l17_concept_nosql_document_model.md) — this is where that concept becomes practical. For our Colab labs (single-node, no replica set), the default `w=1` is sufficient.
+
+### 4.7 Projection, Sorting, and Limiting
 
 Just like SQL's `SELECT col1, col2` and `ORDER BY ... LIMIT`, MongoDB lets you control *which fields* are returned and *how results are ordered*.
 
