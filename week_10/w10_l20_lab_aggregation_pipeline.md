@@ -47,7 +47,9 @@ mongosh --quiet --eval "db.runCommand({ ping: 1 })"
 ```python
 # Setup: Install pymongo and connect (run cells above first)
 !pip install -q pymongo
+```
 
+```python
 from pymongo import MongoClient
 from datetime import datetime
 
@@ -617,8 +619,8 @@ pipeline = [
     # Stage 3: Sort by order count descending
 ]
 
-for doc in orders.aggregate(pipeline):
-    print(f"  {doc['_id']:10s}  {doc['order_count']} orders, avg {doc['avg_items_per_order']:.2f} items/order")
+# for doc in orders.aggregate(pipeline):
+#     print(f"  {doc['_id']:10s}  {doc['order_count']} orders, avg {doc['avg_items_per_order']:.2f} items/order")
 ```
 
 <details>
@@ -648,8 +650,8 @@ pipeline = [
 ]
 
 print("=== Orders by day of March ===")
-for doc in orders.aggregate(pipeline):
-    print(f"  March {doc['_id']:>2d}: {doc['count']} order(s)")
+# for doc in orders.aggregate(pipeline):
+#     print(f"  March {doc['_id']:>2d}: {doc['count']} order(s)")
 ```
 
 <details>
@@ -695,8 +697,8 @@ pipeline = [
 ]
 
 print("=== Multi-product orders ===")
-for doc in orders.aggregate(pipeline):
-    print(f"  {doc['_id']} ({doc['product_count']} products): {doc['products']}")
+# for doc in orders.aggregate(pipeline):
+#     print(f"  {doc['_id']} ({doc['product_count']} products): {doc['products']}")
 ```
 
 <details>
@@ -747,8 +749,8 @@ pipeline = [
 ]
 
 print("=== Revenue by City (Delivered + Shipped) ===")
-for doc in orders.aggregate(pipeline):
-    print(f"  {doc['city']:12s} {doc['order_count']} orders  ${doc['total_revenue']:.2f}")
+# for doc in orders.aggregate(pipeline):
+#     print(f"  {doc['city']:12s} {doc['order_count']} orders  ${doc['total_revenue']:.2f}")
 ```
 
 <details>
@@ -779,17 +781,6 @@ Pipeline structure:
 
 ---
 
-## 8. Cleanup
-
-```python
-client.drop_database("ecommerce_db")
-print("Database 'ecommerce_db' dropped")
-client.close()
-print("Connection closed")
-```
-
----
-
 ## Summary
 
 In this lab, you:
@@ -800,5 +791,3 @@ In this lab, you:
 *   Applied `$match` after `$group` as a **HAVING** equivalent to filter aggregated results
 *   Used **accumulator operators** (`$sum`, `$avg`) for revenue, quantity, and order analysis
 *   Translated a **SQL query to an aggregation pipeline**, bridging your relational knowledge
-
-**Next week:** You'll explore Redis (key-value stores) and learn about SQL injection and secure database connectivity.
