@@ -120,6 +120,16 @@ graph TD
     style ZSET fill:#AB47BC,color:white
 ```
 
+**Important:** The key is always a string. The data structure describes the **value** side:
+
+| Key (always a string) | → | Value (data structure) |
+| :--- | :---: | :--- |
+| `"user:1001:profile"` | → | **Hash** `{name: "Ana", email: "ana@upr.edu"}` |
+| `"queue:tasks"` | → | **List** `["task_a", "task_b", "task_c"]` |
+| `"tags:article:42"` | → | **Set** `{"python", "redis", "nosql"}` |
+| `"leaderboard"` | → | **Sorted Set** `{("luis", 1200), ("ana", 1500)}` |
+| `"greeting"` | → | **String** `"Hello, COMP 4098!"` |
+
 #### Strings
 
 The most basic type. A key maps to a single value (string, number, or serialized data).
@@ -127,7 +137,11 @@ The most basic type. A key maps to a single value (string, number, or serialized
 ```text
 SET greeting "Hello, COMP 4098!"
 GET greeting          → "Hello, COMP 4098!"
+```
 
+Since Redis stores numbers as strings internally, numeric operations like `INCR` work on String values that contain integer representations — there is no separate Integer type:
+
+```text
 SET counter 0
 INCR counter          → 1
 INCR counter          → 2
