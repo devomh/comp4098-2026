@@ -43,7 +43,9 @@ redis-cli ping
 ```python
 # Setup: Install Python client and connect
 !pip install -q redis
+```
 
+```python
 import redis
 import time
 import json
@@ -687,6 +689,4 @@ In this lab, you:
 *   Practiced all five core data structures: **Strings** (counters, TTL), **Hashes** (profiles), **Lists** (queues), **Sets** (tags, intersections), **Sorted Sets** (leaderboards)
 *   Built a practical **rate limiter** using atomic `INCR` and `EXPIRE`
 *   Implemented the **Cache-Aside** pattern with TTL and cache invalidation
-*   Observed the performance difference between cache hits (~0.3 ms) and database queries (~8 ms)
-
-**Next lesson:** Data security — SQL injection attacks, parameterized queries, and secure credential management.
+*   Observed the performance difference between cache hits (\~0.3 ms) and database queries (\~8 ms)
