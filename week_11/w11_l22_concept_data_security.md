@@ -2,392 +2,400 @@
 title: "Data Security & Secure Connectivity"
 week: 11
 type: concept
-tags: [security, sql-injection, owasp, parameterized-queries, credentials]
+tags: [security, sql-injection, owasp, parameterized-queries, credentials, hashing]
 difficulty: intermediate
 duration: "40 mins"
 ---
 
 # Data Security & Secure Connectivity
 
+**Lesson order:** this concept file is the **debrief** for [w11_l22_lab_sql_injection.md](w11_l22_lab_sql_injection.md). The lab showed you the attacks hands-on; this file explains *why* each attack works, *why* each defense holds, and where the whole topic fits in the industry's security model. If you haven't run the lab yet, do that first — this reading is much more useful after you have felt SQLi land in your own hands.
+
+---
+
 ## 1. Learning Objectives
 
 By the end of this lesson, you will be able to:
-*   Explain SQL injection as an attack vector and why it ranks in the OWASP Top 10
-*   Demonstrate how unsanitized user input can alter SQL query logic
-*   Implement parameterized queries as the primary defense against SQL injection
-*   Distinguish between string formatting (vulnerable) and parameterized queries (safe) in Python
-*   Describe secure credential management using environment variables and `.env` files
-*   Explain why connection strings should never appear in source code
+
+*   Explain SQL injection as an attack vector and why it sits in the OWASP Top 10
+*   Describe the **parser / binder separation** that makes parameterized queries safe
+*   Name the "restriction window" constraint — why an attacker's UNION must match column count and types — and explain why that reframes SQLi as a *grammar* problem, not a *filter-bypassing* problem
+*   Distinguish the four major categories of SQLi: classic, UNION-based, blind, and second-order
+*   Implement parameterized queries in the major dialects (psycopg2, SQLAlchemy, sqlite3) and identify what they do *not* protect
+*   Describe defense-in-depth for a database tier: parameterization, hashing, least privilege, credential hygiene, auditing
 
 ---
 
 ## 2. The "Why": Your Database Is an Attack Surface
 
-Every database you've built in this course — PostgreSQL, MongoDB, Redis — accepts commands from application code. If that application takes input from users (web forms, API parameters, search bars) and passes it to the database without proper handling, attackers can manipulate the input to execute unintended commands.
+Every database-backed feature you have ever built has this shape:
 
-This isn't theoretical. SQL injection has been the #1 or top-3 web application vulnerability for over two decades. It has caused some of the largest data breaches in history:
+~~~text
+user input --> application code --> SQL --> database
+~~~
 
-*   **2008 — Heartland Payment Systems:** 130 million credit card numbers stolen via SQL injection
-*   **2011 — Sony Pictures:** User data for 77 million accounts leaked
-*   **2015 — TalkTalk:** Personal data of 157,000 customers exposed
-*   **2019 — Fortnite:** 200 million user accounts vulnerable to a SQL injection flaw
+If the application builds the SQL by *concatenating* the user's input into a query string, the user gets to choose part of the SQL. That is SQL injection, in one sentence.
 
-> **Analogy:** Imagine a bank teller who follows instructions literally. If you write on the withdrawal slip: "Withdraw $100 from account 5678; also transfer all funds from account 1234 to account 5678," an uncritical teller would execute both commands. SQL injection works the same way — the database can't tell the difference between your query and the attacker's injected commands because they arrive as one string.
+This has been the #1 or top-3 web-application vulnerability for twenty years. A non-exhaustive list of breaches where SQLi was a root cause:
+
+*   **2008 — Heartland Payment Systems:** 130 million credit card numbers.
+*   **2011 — Sony Pictures:** 77 million accounts.
+*   **2015 — TalkTalk:** 157,000 customer records.
+*   **2019 — Fortnite:** 200 million accounts exposed by a single vulnerable endpoint.
+
+> **Analogy.** Imagine a bank teller who does exactly what the slip says. You slide across a slip that reads: *"Withdraw $100 from account 5678. Also transfer all funds from account 1234 to account 5678."* A literal-minded teller executes both instructions. The database is that teller. It cannot tell which parts of the query came from the developer and which from the attacker, because they arrive as one string.
 
 ---
 
-## 3. SQL Injection
+## 3. Anatomy of What You Just Did
 
-### 3.1 How It Works
+### 3.1 The parser / binder separation
 
-SQL injection occurs when user input is **concatenated directly into a SQL query string**, allowing the attacker to inject their own SQL commands.
+Databases execute a query in two phases:
 
-Consider a login form that checks username and password:
+1. **Parse.** Take the SQL text and build a tree: *this is a SELECT, that is a WHERE, those are two columns, this is a literal string.* Structure is fixed at the end of this step.
+2. **Bind & execute.** Plug data values into the tree and run it.
 
-```python
-# VULNERABLE — string concatenation
-username = request.form["username"]   # User-provided input
-password = request.form["password"]   # User-provided input
+When user input is **concatenated into the SQL string**, it arrives *before* step 1 — so the input can become structure. An attacker's `' OR 1=1 --` is parsed as three new tokens: a string terminator, a boolean OR clause, a comment.
 
-query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-```
-
-**Normal use:**
-If the user enters `username = "ana"` and `password = "secret123"`:
-
-```sql
-SELECT * FROM users WHERE username = 'ana' AND password = 'secret123'
-```
-
-This works as expected — returns the user if credentials match.
-
-**Attack:**
-If the attacker enters `username = "' OR '1'='1' --"` and any password:
-
-```sql
-SELECT * FROM users WHERE username = '' OR '1'='1' --' AND password = 'anything'
-```
-
-Breaking this down:
-*   `''` — closes the original username string (empty)
-*   `OR '1'='1'` — always true, so the `WHERE` clause matches every row
-*   `--` — SQL comment, ignores everything after it (including the password check)
-
-**Result:** The query returns *all users*. The attacker bypasses authentication entirely.
+When user input is **parameterized**, it arrives *between* step 1 and step 2. The parser has already committed to the grammar. The input can only fill a slot that the grammar already designated as a literal. No matter what the input says, it cannot introduce a new clause.
 
 ```mermaid
-graph LR
-    subgraph "Normal Input"
-        U1["username: ana"] --> Q1["WHERE username = 'ana'<br/>AND password = 'secret123'"]
-        Q1 --> R1["Returns 1 user<br/>(correct behavior)"]
+graph TD
+    subgraph "VULNERABLE: concatenate first, parse second"
+        A1["user input"] --> A2["f-string concatenation"]
+        A2 --> A3["full SQL string<br/>(user input is now grammar)"]
+        A3 --> A4["parser"]
+        A4 --> A5["execute — INJECTION LANDS"]
     end
+    style A5 fill:#E53935,color:white
+```
 
-    subgraph "SQL Injection"
-        U2["username: ' OR '1'='1' --"] --> Q2["WHERE username = '' OR '1'='1'<br/>-- AND password = '...'"]
-        Q2 --> R2["Returns ALL users<br/>(authentication bypassed)"]
+```mermaid
+graph TD
+    subgraph "SAFE: parse first, bind second"
+        B1["SQL template with placeholders"] --> B2["parser"]
+        B2 --> B3["fixed query tree"]
+        B4["user input"] --> B5["binder"]
+        B3 --> B5
+        B5 --> B6["execute — input is literal data"]
     end
-
-    style R1 fill:#7CB342,color:white
-    style R2 fill:#E53935,color:white
+    style B6 fill:#7CB342,color:white
 ```
 
-### 3.2 Types of SQL Injection
+This is the whole mental model. Every other rule about SQLi follows from it.
 
-| Type | Technique | Impact |
-| :--- | :--- | :--- |
-| **Classic (In-band)** | Inject SQL via input fields; results visible in the response | Read/modify data, bypass auth |
-| **UNION-based** | Use `UNION SELECT` to extract data from other tables | Read any table in the database |
-| **Blind** | No visible output; infer data from true/false responses or timing | Slower but still dangerous |
-| **Second-order** | Malicious input stored first, executed later in a different query | Harder to detect |
+### 3.2 The "Restriction Window" — why Rungs 3 and 4 felt so constrained
 
-### 3.3 Beyond Authentication: Data Theft and Destruction
+When you wrote `' UNION SELECT ?, ?, ? --` in the lab, you were not free to invent anything you liked. You had to:
 
-SQL injection isn't limited to login bypasses. Depending on database permissions:
+*   Match the **column count** of the outer query — three columns, not two, not four.
+*   Match **compatible types** — integer in slot 1, text in slots 2 and 3.
+*   Produce **syntactically valid SQL** that fits inside the single quote the outer query left open.
 
-```sql
--- Extract all email addresses (UNION-based)
-' UNION SELECT email, password FROM users --
+Call this the *restriction window*: the shape the victim query leaves for the attacker to fill. An attacker who can see it (via error messages, behavioral probing, or guesswork) can craft a matching payload. An attacker who cannot see it has a much harder problem (this is the *blind* case, §7.B).
 
--- Delete an entire table
-'; DROP TABLE users; --
+The practical implication is more interesting than it first appears: **SQL injection is a grammar-conformance problem, not an escape-character problem.** The attacker is not "sneaking past quotes." They are writing valid SQL that fits a valid slot. That is why escape-based defenses are so fragile — they are trying to sanitize the wrong category of thing. The right defense separates structure from data *before* the data is seen. That is parameterization.
 
--- Read files from the server (PostgreSQL)
-'; COPY (SELECT '') TO '/tmp/hack.txt'; --
-```
+### 3.3 Taxonomy
 
-The famous "Bobby Tables" comic illustrates this:
+The lab demonstrated four of the five categories; the deep dive below covers the fifth.
 
-```text
-Student name: Robert'); DROP TABLE students;--
+| Type | What it is | Lab rung |
+|---|---|---|
+| **Classic (in-band)** | Payload produces visible changes in the response (rows, errors) | Rungs 1, 2 |
+| **UNION-based** | Use `UNION SELECT` to smuggle data from a different table through the response | Rungs 3, 4 |
+| **Stacked** | Chain multiple statements separated by `;` (driver-dependent) | Rung 5 |
+| **Second-order** | Malicious value stored safely; fires on a *later* non-parameterized query | §6 |
+| **Blind** | No visible output — infer data from boolean side-channels or timing | §7.B |
 
-Resulting query:
-INSERT INTO students (name) VALUES ('Robert'); DROP TABLE students;--')
-```
+### 3.4 The classic login-bypass example — for completeness
+
+You will meet this in every article, every interview question, every CTF writeup. Given:
+
+~~~python
+sql = f"SELECT * FROM users WHERE username = '{u}' AND password = '{p}'"
+~~~
+
+Input `u = "' OR 1=1 --"` renders as:
+
+~~~sql
+SELECT * FROM users WHERE username = '' OR 1=1 --' AND password = '...'
+~~~
+
+First user in the table, probably admin, logged in as. Mechanically this is a special case of Rung 1 from the lab — the same grammar attack, applied to a different query shape. *Recognize this pattern*; it is part of the security-literacy baseline, and it is how most SQLi articles introduce the topic. But it is not the whole picture, and the lab deliberately started somewhere else so you would not mistake the canonical demo for the general phenomenon.
 
 ---
 
 ## 4. The Defense: Parameterized Queries
 
-### 4.1 The Core Principle
+### 4.1 Why parameterized queries work
 
-**Never build SQL queries by concatenating user input into the query string.** Instead, use **parameterized queries** (also called prepared statements or bound parameters), where the SQL structure and the data are sent to the database separately.
+Because of §3.1 — structure is fixed before data is seen. That's it. That's the whole reason.
 
-```mermaid
-graph TD
-    subgraph "VULNERABLE: String Concatenation"
-        INPUT1["User Input:<br/>' OR '1'='1' --"]
-        CONCAT["f'SELECT * FROM users<br/>WHERE name = '{input}'"]
-        SQL1["SELECT * FROM users<br/>WHERE name = '' OR '1'='1' --"]
-        DB1["Database executes<br/>INJECTED SQL"]
+Every good database driver supports this. It is not optional, slow, or exotic. It is the default, and every codebase you write in your career should treat raw string-concatenated SQL as a **failing code review** the moment it appears.
 
-        INPUT1 --> CONCAT --> SQL1 --> DB1
-    end
+~~~python
+# VULNERABLE — any of these, same reason
+sql = f"... WHERE username = '{u}'"
+sql = "... WHERE username = '{}'".format(u)
+sql = "... WHERE username = '%s'" % u
+sql = "... WHERE username = '" + u + "'"
 
-    subgraph "SAFE: Parameterized Query"
-        INPUT2["User Input:<br/>' OR '1'='1' --"]
-        PARAM["SELECT * FROM users<br/>WHERE name = %s"]
-        BIND["Parameter: [\"' OR '1'='1' --\"]"]
-        DB2["Database treats input<br/>as LITERAL STRING"]
+# SAFE
+cursor.execute("... WHERE username = %s", (u,))
+~~~
 
-        INPUT2 --> PARAM
-        INPUT2 --> BIND
-        PARAM --> DB2
-        BIND --> DB2
-    end
+The formatting operator is a distractor. The bug is **concatenation**, regardless of syntax.
 
-    style DB1 fill:#E53935,color:white
-    style DB2 fill:#7CB342,color:white
-```
+### 4.2 Parameterized queries across languages
 
-### 4.2 How Parameterized Queries Work
+| Library / Framework | Placeholder | Example |
+|---|---|---|
+| **psycopg2** (Python / PostgreSQL) | `%s` | `cur.execute("... WHERE id = %s", (42,))` |
+| **sqlite3** (Python stdlib)         | `?`  | `cur.execute("... WHERE id = ?", (42,))` |
+| **SQLAlchemy Core** (Python)        | `:name` | `conn.execute(text("... WHERE id = :id"), {"id": 42})` |
+| **DuckDB** (Python)                 | `?`  | `con.execute("... WHERE id = ?", [42])` |
+| **psycopg / asyncpg** native        | `$1, $2` | `await conn.fetch("... WHERE id = $1", 42)` |
+| **pymongo** (Python / MongoDB)      | n/a — dict-based | `coll.find({"username": u})` |
+| **Node-pg** (Node.js)               | `$1, $2` | `client.query("... WHERE id = $1", [42])` |
+| **JDBC** (Java)                     | `?` + `setXxx` | `ps.setInt(1, 42); ps.executeQuery();` |
 
-When you use parameterized queries, the database driver sends two things separately:
+Different syntax, identical semantics. In every one of these, the template is parsed first and the values are bound as data.
 
-1. **The query template** — with placeholders (`%s`, `?`, `:name`) where data belongs
-2. **The parameter values** — as a separate data structure
+### 4.3 What parameterization does *not* protect
 
-The database engine compiles the query template first (parsing the SQL structure), then binds the parameter values as literal data. The values can never be interpreted as SQL commands — they are always treated as data.
+Placeholders only stand in for **values**. They cannot stand in for identifiers (table or column names) or structural elements. If you need to inject those dynamically, parameterization alone is not enough.
 
-```python
-# VULNERABLE: String formatting (NEVER do this with user input)
-query = f"SELECT * FROM users WHERE username = '{username}'"
+| Thing you want dynamic | Parameterizable? | What to do |
+|---|---|---|
+| Literal values in `WHERE`, `VALUES`, `SET` | Yes | Use the driver's placeholder |
+| Table or column names | **No** | Validate against an **allowlist** in application code, then format into the SQL |
+| `ORDER BY` column        | **No** | Allowlist of sort keys; map user input to a known column |
+| Direction (`ASC`/`DESC`) | **No** | Allowlist: `{"asc": "ASC", "desc": "DESC"}[user_input]` |
+| `IN (...)` list of values | Yes, per driver | psycopg2 accepts tuples; SQLAlchemy has `bindparam(expanding=True)` |
 
-# SAFE: Parameterized query (psycopg2)
-cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-
-# SAFE: Parameterized query (SQLAlchemy)
-result = engine.execute(text("SELECT * FROM users WHERE username = :name"),
-                        {"name": username})
-```
-
-**What happens with the attack input `' OR '1'='1' --`?**
-*   **Concatenation:** The string becomes part of the SQL syntax → injection succeeds
-*   **Parameterized:** The entire string `' OR '1'='1' --` is treated as a literal username value → database searches for a user literally named `' OR '1'='1' --` → finds nothing → no injection
-
-### 4.3 Parameterized Queries Across Languages
-
-| Library/Framework | Placeholder | Example |
-| :--- | :--- | :--- |
-| **psycopg2** (Python/PostgreSQL) | `%s` | `cursor.execute("SELECT * FROM t WHERE id = %s", (42,))` |
-| **sqlite3** (Python) | `?` | `cursor.execute("SELECT * FROM t WHERE id = ?", (42,))` |
-| **SQLAlchemy** (Python) | `:name` | `text("SELECT * FROM t WHERE id = :id"), {"id": 42}` |
-| **pymongo** (Python/MongoDB) | N/A (uses dicts) | `collection.find({"username": username})` |
-| **Node.js/pg** | `$1, $2` | `client.query("SELECT * FROM t WHERE id = $1", [42])` |
-| **Java/JDBC** | `?` | `ps.setInt(1, 42)` |
-
-**Note on MongoDB:** MongoDB uses dictionary-based queries, not string-based SQL. This makes it naturally resistant to *SQL* injection, but it's still vulnerable to **NoSQL injection** if query operators are constructed from unsanitized user input (e.g., passing `{"$gt": ""}` as a value).
-
-### Key Takeaway
-
-*   **Parameterized queries are not optional** — they are the standard, required defense
-*   No amount of input sanitization (escaping quotes, stripping characters) is as reliable as parameterized queries
-*   Every database driver in every language supports them — there is no excuse not to use them
+**Allowlist, not blacklist.** The rule is: user input chooses *which* of a set of known-safe identifiers to use; it never provides an identifier directly. A dropdown in the UI maps to `{"name": "name", "price": "price", "rating": "rating"}` in code. Anything outside the map is rejected.
 
 ---
 
-## 5. The OWASP Top 10
+## 5. Secure Credential Management & Defense in Depth
 
-The **Open Web Application Security Project (OWASP)** maintains a regularly updated list of the most critical web application security risks. SQL injection falls under multiple categories.
+SQLi prevention is the load-bearing defense. Real systems layer several more on top, so that when any single layer fails, the damage is bounded.
 
-### 2021 OWASP Top 10 (Current as of 2025)
+### 5.1 Credentials belong outside the code
 
-| Rank | Category | Relevance to This Course |
-| :--- | :--- | :--- |
-| **A01** | Broken Access Control | Unauthorized data access (e.g., accessing other users' records) |
-| **A02** | Cryptographic Failures | Storing passwords in plaintext, weak hashing |
-| **A03** | **Injection** | **SQL injection, NoSQL injection, command injection** |
-| **A04** | Insecure Design | Missing security controls in architecture |
-| **A05** | Security Misconfiguration | Default passwords, open database ports, verbose error messages |
-| **A06** | Vulnerable Components | Using outdated libraries with known vulnerabilities |
-| **A07** | Authentication Failures | Weak passwords, missing rate limiting on login |
-| **A08** | Data Integrity Failures | Accepting untrusted serialized data |
-| **A09** | Logging Failures | Not logging security events for detection |
-| **A10** | Server-Side Request Forgery | Tricking the server into making unauthorized requests |
+A connection string looks like:
 
-**A03: Injection** dropped from #1 (2017) to #3 (2021) — not because it became less dangerous, but because more applications now use frameworks with built-in parameterized queries. The risk remains critical for anyone writing raw SQL.
-
----
-
-## 6. Secure Credential Management
-
-### 6.1 The Problem: Credentials in Code
-
-Database connections require credentials: host, port, username, password. A connection string looks like:
-
-```text
+~~~text
 postgresql://admin:s3cretP@ss!@db.example.com:5432/production_db
-```
+~~~
 
-If this string appears in your source code and that code is pushed to GitHub, your database is compromised. GitHub scans for exposed credentials and sends alerts — but automated bots also scan public repos and can exploit credentials within minutes of a commit.
+If any version of that string has ever been committed to a git repository — public or private, merged or not — treat the credential as compromised. GitHub's own scanners and third-party bots watch public commits continuously and exploit leaked credentials within minutes. Private repos are safer but not safe; contractors leave, forks get cloned, laptops get stolen.
 
 ```mermaid
 graph LR
-    BAD["Connection string<br/>in source code"]
-    GIT["Pushed to<br/>GitHub"]
-    BOT["Bot scans<br/>public repos"]
-    BREACH["Database<br/>compromised"]
-
-    BAD --> GIT --> BOT --> BREACH
-
-    style BAD fill:#E53935,color:white
-    style BREACH fill:#E53935,color:white
+    A[Connection string<br/>in source code] --> B[Pushed to git]
+    B --> C[Scanner / bot]
+    C --> D[Database compromised]
+    style A fill:#E53935,color:white
+    style D fill:#E53935,color:white
 ```
 
-### 6.2 Environment Variables
+### 5.2 The hierarchy
 
-The standard solution: store credentials in **environment variables** that exist only on the machine running the code.
+| Approach | Where it's appropriate |
+|---|---|
+| Hardcoded in source | **Never.** |
+| `.env` file in `.gitignore`, loaded via `python-dotenv` | Local development only |
+| Environment variables injected by the deployment system | Containerized / cloud apps |
+| Dedicated secret manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager) | Production, especially for regulated data |
 
-```python
-import os
+### 5.3 Principle of least privilege
 
-# Read credentials from environment variables
-db_host = os.environ["DB_HOST"]        # e.g., "db.example.com"
-db_user = os.environ["DB_USER"]        # e.g., "admin"
-db_pass = os.environ["DB_PASSWORD"]    # e.g., "s3cretP@ss!"
-db_name = os.environ["DB_NAME"]        # e.g., "production_db"
+The lab's `postgres` superuser was deliberately wrong. A least-privileged user scoped to only what the feature needs changes what an attacker can do after a successful SQLi:
 
-# Build connection string from variables
-connection_string = f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
-```
+| DB user privileges                       | Worst case after SQLi                          |
+|------------------------------------------|------------------------------------------------|
+| Superuser (our lab)                      | `DROP`, `COPY FROM`/`COPY PROGRAM` → RCE on the DB host |
+| Owner of the application schema          | Read/modify/drop any table the app uses         |
+| `SELECT` on specific tables, no `DELETE` | Read-only leak — bad, but recoverable           |
+| Read-only view that excludes PII         | Leak of non-sensitive data only                 |
 
-**Advantages:**
-*   Credentials never appear in source code or version control
-*   Different environments (dev, staging, production) use different values
-*   Easy to rotate: change the variable, restart the app
+Least privilege does not prevent SQLi. It caps the blast radius.
 
-### 6.3 The `.env` File Pattern
+### 5.4 Hashing passwords (recap from the lab)
 
-Typing `export DB_PASSWORD=...` every time you start a development session is tedious. The `.env` file pattern solves this:
+You saw this in §5.5 of the lab. The compressed version:
 
-1. Create a `.env` file in your project root with key-value pairs
-2. Use the `python-dotenv` library to load them into `os.environ`
-3. **Add `.env` to `.gitignore`** so it never enters version control
+*   **Plaintext or unsalted SHA-256** — broken by dictionary attack the moment a hash leaks.
+*   **Salt** — defeats rainbow tables and cross-user precomputation. Necessary, not sufficient.
+*   **Iteration cost** — bcrypt/argon2 are designed to be slow. That turns a millisecond dictionary attack into a months-long one per user. This is what bounds the damage when the DB is stolen.
+*   **argon2id** is the current best-practice default for new systems; **bcrypt** remains fine; anything older (MD5, unsalted SHA) is a finding in any security review.
 
-```text
-# .env (THIS FILE IS NEVER COMMITTED)
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=dev_user
-DB_PASSWORD=dev_password_123
-DB_NAME=dev_database
-```
+### 5.5 Monitoring and auditing
 
-```python
-from dotenv import load_dotenv
-import os
+Parameterization prevents the attacks you know about. Logging and anomaly detection catch the one that slips through when someone adds a raw `.execute(f"...")` in a later PR.
 
-load_dotenv()  # Reads .env file into os.environ
+*   Turn on query logging in any data tier that handles sensitive data.
+*   Watch for query-shape anomalies: sudden spikes in `UNION SELECT`, unusually long query strings, bursts of syntax errors (a sign of live probing).
+*   Log *access* to PII, not just changes. Regulated environments (HIPAA, PCI, GLBA) generally require this.
 
-db_host = os.environ["DB_HOST"]
-db_pass = os.environ["DB_PASSWORD"]
-print(f"Connecting to {db_host}...")
-```
+---
 
-### 6.4 The Credential Management Hierarchy
+## 6. OWASP Top 10 — Where SQLi Sits in the Threat Model
 
-From least secure to most secure:
+The **Open Web Application Security Project (OWASP)** publishes the most widely referenced list of web-application security risks. The current release is the 2021 list, still authoritative as of 2026.
 
-| Method | Security Level | Use When |
-| :--- | :--- | :--- |
-| Hardcoded in source code | **Never** | Never |
-| `.env` file (local, in `.gitignore`) | Development | Local development, Colab notebooks |
-| Environment variables (set by deployment) | Staging/Production | Docker, cloud deployments |
-| Secret managers (AWS Secrets Manager, Vault) | Production | Sensitive production systems |
+| Rank | Category | Relevance to this course |
+|---|---|---|
+| A01 | Broken Access Control            | Accessing other users' data; authorization bugs |
+| A02 | Cryptographic Failures           | Plaintext passwords, weak hashes, no TLS |
+| **A03** | **Injection**                | **SQL / NoSQL / command injection** — this lesson |
+| A04 | Insecure Design                  | Missing security requirements at the architecture stage |
+| A05 | Security Misconfiguration        | Default credentials, superuser app connections, verbose errors |
+| A06 | Vulnerable and Outdated Components | Old library versions with known CVEs |
+| A07 | Identification and Authentication Failures | Weak passwords, missing rate limiting |
+| A08 | Software and Data Integrity Failures | Trusting unsigned updates, insecure deserialization |
+| A09 | Security Logging and Monitoring Failures | No audit trail when a breach happens |
+| A10 | Server-Side Request Forgery      | Server fetches attacker-controlled URLs |
 
-### Key Takeaway
-
-*   **Never hardcode credentials** in source files — even "temporarily"
-*   Use `.env` files for development and add `.env` to `.gitignore`
-*   Use environment variables or secret managers for production
-*   If you accidentally commit a credential, **rotate it immediately** — deleting the commit is not enough (it remains in git history)
+Injection dropped from #1 (2017) to #3 (2021) — not because it got less dangerous, but because the fraction of applications using frameworks with built-in parameterization grew. For anyone writing raw SQL, it is still the bug most likely to end a career.
 
 ---
 
 ## 7. Deep Dives (Optional)
 
-### A. NoSQL Injection in MongoDB
+### A. Multi-line queries and the `--` comment
 
 <details>
-<summary>Click to expand: MongoDB Is Not Immune</summary>
+<summary>Click to expand: why `--` sometimes breaks the attack on multi-line SQL</summary>
 
-MongoDB doesn't use SQL, but it's still vulnerable to injection if query operators are constructed from unsanitized user input.
+Single-line comments (`--`) terminate at the end of the current line. So in a multi-line query:
 
-**Vulnerable pattern (Python/Flask):**
+~~~python
+sql = f"""
+    SELECT * FROM users
+    WHERE username = '{u}'
+    AND password = '{p}'
+"""
+~~~
 
-```python
-# If username comes from a JSON body, an attacker can send an object
-# instead of a string: {"username": {"$gt": ""}, "password": {"$gt": ""}}
-user = db.users.find_one({
-    "username": request.json["username"],
-    "password": request.json["password"]
-})
-```
+With `u = "' OR 1=1 --"`:
 
-If the attacker sends `{"username": {"$gt": ""}, "password": {"$gt": ""}}`, the query becomes:
+~~~sql
+SELECT * FROM users
+WHERE username = '' OR 1=1 --'
+AND password = '...'
+~~~
 
-```python
-db.users.find_one({"username": {"$gt": ""}, "password": {"$gt": ""}})
-```
+The `--` kills the stray `'` on its line, but line 4 survives. Operator precedence groups it as:
 
-This matches any user whose username and password are greater than an empty string — which is all users.
+~~~sql
+WHERE username = '' OR (1=1 AND password = '...')
+~~~
 
-**Defense:**
-*   Validate that inputs are the expected type (string, not dict/object)
-*   Use schema validation on API inputs (e.g., Pydantic, JSON Schema)
-*   MongoDB drivers handle this safely if you pass strings directly — the vulnerability arises from passing unsanitized JSON objects as query values
+No real row matches `password = 'anything'`, so the bypass fails. Attackers adapt in two ways:
+
+**1. Block comments `/* ... */`** span multiple lines. Pair them across input fields:
+
+~~~text
+username: ' OR 1=1 /*
+password: */ --
+~~~
+
+Renders as:
+
+~~~sql
+WHERE username = '' OR 1=1 /*'
+AND password = '*/ --'
+~~~
+
+Everything between `/*` and `*/` disappears. Bypass succeeds.
+
+**2. Close the clause validly** without commenting out the rest:
+
+~~~text
+username: ' OR 1=1 OR '1'='
+password: anything
+~~~
+
+Renders as:
+
+~~~sql
+WHERE username = '' OR 1=1 OR '1'=''
+AND password = 'anything'
+~~~
+
+`OR 1=1` is true → whole `WHERE` is true. No comments needed.
+
+**Conclusion:** multi-line SQL is not a defense. It just changes which payloads the attacker chooses.
 
 </details>
 
-### B. Password Hashing (Beyond This Course)
+### B. Blind SQL Injection
 
 <details>
-<summary>Click to expand: Why Passwords Should Never Be Stored as Plaintext</summary>
+<summary>Click to expand: attacking without any visible output</summary>
 
-This course focuses on data management, not authentication, but understanding password storage is essential context:
+What if the vulnerable query runs but the application never shows you the result? No rows, no error messages. Attackers still win, they just switch side-channels.
 
-**Never store passwords in plaintext.** If an attacker gains read access to your database (via SQL injection or a backup leak), plaintext passwords expose all user accounts — and since people reuse passwords, the damage extends beyond your application.
+**Boolean-based blind.** Inject a condition whose truth value is observable from the response: "did the product page render or 404?" Probe:
 
-**The correct approach:**
-1. Hash the password with a slow, salted algorithm: **bcrypt**, **argon2**, or **scrypt**
-2. Store only the hash in the database
-3. To verify a login, hash the submitted password and compare hashes
+~~~text
+' AND (SELECT substring(password_hash, 1, 1) FROM users WHERE id=1) = 'a' --
+~~~
 
-```python
-import bcrypt
+Page renders → first character of hash is `a`. Increment the position, enumerate the alphabet, reconstruct the hash one character at a time. Tedious but mechanical; tools like `sqlmap` automate it.
 
-# Registration: hash and store
-password = "user_password_123"
-hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-# Store `hashed` in the database
+**Time-based blind.** When not even a binary signal is visible, use delays:
 
-# Login: verify
-submitted = "user_password_123"
-if bcrypt.checkpw(submitted.encode(), hashed):
-    print("Login successful")
-```
+~~~text
+' AND (SELECT CASE WHEN (first_char = 'a') THEN pg_sleep(5) ELSE 0 END) --
+~~~
 
-**Why bcrypt, not SHA-256?**
-SHA-256 is fast — an attacker with a GPU can compute billions of SHA-256 hashes per second, brute-forcing passwords rapidly. bcrypt is *intentionally slow* (configurable work factor), making brute-force attacks impractical.
+If the response takes >5 seconds, the guess was right. Slower but works against fully silent endpoints.
+
+**Practical note:** blind SQLi is orders of magnitude slower than UNION-based, but it is not less effective. An hour of automated probing can still exfiltrate a user table. Parameterize anyway; "the attacker can't see errors" is not a mitigation.
+
+</details>
+
+### C. NoSQL injection
+
+<details>
+<summary>Click to expand: MongoDB is not immune</summary>
+
+MongoDB uses dictionary-shaped queries instead of SQL strings, so classic string concatenation doesn't apply directly. But if an application takes JSON input from the client and forwards it into a query, the client can substitute operators for values:
+
+~~~python
+# If username/password come straight from request.json and the client
+# sends {"username": {"$gt": ""}, "password": {"$gt": ""}},
+# the query becomes:
+db.users.find_one({
+    "username": {"$gt": ""},
+    "password": {"$gt": ""},
+})
+# "any user whose username and password are lexically greater than empty string" — everyone.
+~~~
+
+**Defenses:** schema-validate API inputs (Pydantic, JSON Schema), coerce fields to expected primitive types before using them in a query, never pass the raw JSON body into a query filter.
+
+</details>
+
+### D. ORMs and the escape hatches
+
+<details>
+<summary>Click to expand: does an ORM save me?</summary>
+
+Mostly yes. SQLAlchemy's Core and ORM APIs, Django's QuerySet, SQLModel — all generate parameterized SQL by default. The attacks in this lab fail against ORM-expressed queries for the same reason they fail against `cursor.execute(sql, params)`: structure and data are separate.
+
+The risk lives in the **escape hatches**:
+
+*   SQLAlchemy's `text()` with string interpolation.
+*   Django's `.extra(where=[...])` and `.raw(...)` with f-strings.
+*   Any ORM's "just run this string" backdoor.
+
+These are legitimate features; real applications sometimes need them. But they drop you back to raw SQL, which means you own the parameterization again. Treat every `.execute(text(f"..."))` as a code-review flag.
 
 </details>
 
@@ -395,40 +403,47 @@ SHA-256 is fast — an attacker with a GPU can compute billions of SHA-256 hashe
 
 ## 8. FAQ / Industry Reality
 
-### "Can't I just escape quotes in user input instead of using parameterized queries?"
+**"Can't I just escape quotes in user input?"**
+Escaping is fragile. Different databases have different rules; Unicode normalization, encoding mismatches, and second-order injection all break naive escape filters. Every OWASP guide recommends parameterized queries as the *primary* defense and treats escaping as an additional layer at best. If your defense is "I replaced `'` with `''`", you are one clever attacker away from a breach.
 
-**Answer:** Escaping (replacing `'` with `''`) is fragile and error-prone. Different databases have different escaping rules. Unicode tricks, encoding mismatches, and second-order injection can bypass escaping. Parameterized queries are simpler, more reliable, and database-agnostic. Every security guide, OWASP included, recommends parameterized queries as the primary defense — not escaping.
+**"I'm a data scientist, not a web developer. Why does this matter to me?"**
+Data scientists write SQL in notebooks, internal BI tools (Metabase, Superset), custom dashboards, and pipelines. Any of these that accept user parameters — a date range, a category filter, a free-text search — and build SQL by string formatting is vulnerable. Internal tools are often *less* hardened than public apps because the network is assumed to be trusted, which means an internal SQLi can be more damaging, not less.
 
-### "I'm a data scientist, not a web developer. Why should I care about SQL injection?"
+**"What about stored procedures?"**
+Stored procedures are only safe if they *themselves* use parameterized inputs internally. A stored procedure that concatenates its arguments into a dynamic SQL string is every bit as vulnerable as application code that does the same.
 
-**Answer:** Data scientists write SQL in notebooks, dashboards (Metabase, Superset), internal tools, and data pipelines. If any of these accept user input — a search box, a date filter, a parameter dropdown — and pass it to SQL via string concatenation, the system is vulnerable. Internal tools are often *less* protected than public-facing apps because teams assume the network is trusted. An internal SQL injection can expose sensitive datasets or corrupt analytical tables.
-
-### "Is it safe to put database credentials in a Colab notebook?"
-
-**Answer:** Colab notebooks should use either (a) ephemeral local databases (like our in-notebook PostgreSQL/MongoDB installs) that require no credentials, or (b) Google Colab's Secrets feature (`userdata.get('key')`) for cloud database credentials. Never paste production credentials into a notebook cell — notebooks are often shared, downloaded, or committed to repos.
+**"Is it safe to paste my database credentials into a Colab notebook?"**
+For this course's labs, yes — the databases are local and disposable. For anything connected to real data, no. Use Colab's Secrets feature (`google.colab.userdata`) or a real deployment environment. Notebooks are routinely shared, downloaded, and committed, and each of those is an exit channel for a credential.
 
 ---
 
 ## 9. Summary & Next Steps
 
-**Key takeaways:**
+Compressed to one page:
 
-*   **SQL injection** exploits string concatenation of user input into SQL queries, allowing attackers to read, modify, or delete data
-*   **Parameterized queries** are the primary defense — they send SQL structure and data values separately, so user input can never be interpreted as SQL commands
-*   The **OWASP Top 10** identifies injection as one of the most critical web application risks
-*   **Credentials belong in environment variables or `.env` files**, never in source code
-*   Always add `.env` to `.gitignore` — if you accidentally commit a credential, rotate it immediately
+*   **SQL injection** is what happens when user input becomes part of the SQL grammar instead of staying as data.
+*   **Parameterized queries** fix this by parsing structure first and binding data second. They are the primary defense. There is no general substitute.
+*   The **restriction window** — column count and types — is why attacker UNIONs have to conform to the victim query. This makes SQLi a grammar problem, not an escape-sequence problem, which is why escape-based defenses are unreliable.
+*   **Defense in depth** layers hashing (bcrypt/argon2), least privilege, credential hygiene, and logging on top of parameterization. Each layer bounds the damage when another fails.
+*   **OWASP A03: Injection** remains a top-three risk. Treat any string-concatenated SQL in a code review as a blocker.
 
-*   **Next:** Go to the Practical Lab [w11_l22_lab_sql_injection.md](w11_l22_lab_sql_injection.md) to demonstrate a SQL injection attack, fix it with parameterized queries, and practice secure credential management.
+**Next lesson:** Module 4 begins with Lesson 23 — **Data Access Layer architecture**. You will apply everything from this week (parameterized queries, credential hygiene, least privilege) to a structured DAL using connection pooling and the DAO pattern.
 
 ---
 
 ## 10. Further Reading
 
-### Documentation
-*   [OWASP: SQL Injection](https://owasp.org/www-community/attacks/SQL_Injection) — Authoritative reference on SQL injection attack patterns and defenses
-*   [OWASP Top 10 (2021)](https://owasp.org/www-project-top-ten/) — The full list of critical web application security risks
+### Authoritative references
+*   [OWASP: SQL Injection](https://owasp.org/www-community/attacks/SQL_Injection) — the canonical reference on attack patterns and defenses
+*   [OWASP Top 10 (2021)](https://owasp.org/www-project-top-ten/) — full list of categories with mitigation guidance
+*   [OWASP: SQL Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html) — concise defense checklist
 
-### Articles & Tutorials
-*   [psycopg2 Documentation: Passing Parameters to SQL Queries](https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries) — Python/PostgreSQL parameterized query reference with security warnings
-*   [The Twelve-Factor App: Config](https://12factor.net/config) — Industry-standard methodology for storing configuration (including credentials) in the environment
+### Documentation
+*   [psycopg2: Passing Parameters to SQL Queries](https://www.psycopg.org/docs/usage.html#passing-parameters-to-sql-queries) — Python/PostgreSQL parameterization, with security warnings
+*   [SQLAlchemy: Textual SQL](https://docs.sqlalchemy.org/en/20/core/tutorial.html#using-textual-sql) — `text()`, `bindparam`, and how to avoid concatenation inside `text()`
+
+### Hands-on practice
+*   [PortSwigger Web Security Academy: SQL Injection](https://portswigger.net/web-security/sql-injection) — free browser-based labs covering every category in this lesson, including blind and second-order
+
+### Industry methodology
+*   [The Twelve-Factor App: Config](https://12factor.net/config) — the standard argument for keeping credentials outside source code

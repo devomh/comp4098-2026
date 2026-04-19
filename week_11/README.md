@@ -38,19 +38,23 @@ By the end of this week, you'll have hands-on experience with all four database 
 ### Learning Objectives
 
 - Explain SQL injection as an attack vector and why it ranks in the OWASP Top 10
-- Demonstrate how unsanitized user input can alter SQL query logic
-- Implement parameterized queries as the primary defense against SQL injection
-- Distinguish between string formatting (vulnerable) and parameterized queries (safe) in Python
-- Describe secure credential management using environment variables and `.env` files
-- Explain why connection strings should never appear in source code
+- Describe the **parser / binder separation** that makes parameterized queries safe
+- Articulate the "restriction window" — why an attacker's injection must conform to the victim query's column count and types — and reframe SQLi as a grammar problem, not an escape-character problem
+- Distinguish the four major SQLi categories: classic, UNION-based, blind, and second-order
+- Implement parameterized queries in Python (psycopg2, SQLAlchemy) and identify what they do **not** protect (identifiers, `ORDER BY`)
+- Apply **defense in depth**: parameterization, salted + iterated password hashing (bcrypt/argon2), principle of least privilege, credential hygiene with `.env` files and secret managers, query monitoring
+
+### Lesson Flow (lab-first)
+
+This lesson inverts the usual order: **run the lab first**, then read the concept file as a debrief. You will attack a deliberately vulnerable product-search function through five escalating rungs (filter bypass → column discovery → UNION type probing → data exfiltration → stacked destruction), then crack the stolen password hashes, then rebuild everything with parameterized queries. The concept file explains *why* each attack worked and each defense held.
 
 ### Materials
 
-**Concept Notes:**
-- [Data Security & Secure Connectivity](w11_l22_concept_data_security.md)
-
-**Lab Exercise:**
+**Lab Exercise (start here):**
 - [Lab: SQL Injection & Secure Connectivity](w11_l22_lab_sql_injection.md)
+
+**Concept Notes (debrief):**
+- [Data Security & Secure Connectivity](w11_l22_concept_data_security.md)
 
 ### Interactive Notebook
 
@@ -76,19 +80,27 @@ By the end of this week, you'll have hands-on experience with all four database 
 - **Write-Through** — Application writes to cache and database simultaneously; cache is always current
 - **TTL (Time-To-Live)** — Automatic expiration that prevents stale data and manages memory
 
-### SQL Injection
+### SQL Injection — The Attack Ladder
 
-| Attack Type | Example Input | Effect |
+The L22 lab walks through five escalating attacks against a vulnerable product-search function. Each rung teaches a different mechanic:
+
+| Rung | Example Input | What it teaches |
 | :--- | :--- | :--- |
-| **Tautology** | `' OR '1'='1` | Bypasses authentication by making WHERE always true |
-| **Union-based** | `' UNION SELECT * FROM users --` | Extracts data from other tables |
-| **Destructive** | `'; DROP TABLE users; --` | Deletes entire tables |
+| **1. Filter bypass** | `' OR 1=1 --` | Always-true clause dissolves the `WHERE` filter — the canonical SQLi move |
+| **2. Column discovery** | `' ORDER BY 3 --` | Probing the query shape through error messages |
+| **3. Type probing (UNION)** | `' UNION SELECT NULL, NULL, NULL --` | The "restriction window": UNION must match column count and types |
+| **4. Data exfiltration** | `' UNION SELECT 0, username, password_hash FROM users --` | Smuggling another table's rows through the vulnerable query |
+| **5. Stacked destruction** | `'; DROP TABLE products; --` | Chained statements (driver-dependent); why least-privilege DB users matter |
 
-### Defense Strategies
+**Second-order injection** is demonstrated separately: a malicious username is stored cleanly via a parameterized INSERT, then later fires when a different, non-parameterized query concatenates it back into SQL.
 
-- **Parameterized queries** — The primary defense; separates SQL structure from user data
-- **Environment variables / `.env` files** — Keep credentials out of source code
-- **Principle of least privilege** — Database users should have only the permissions they need
+### Defense in Depth
+
+- **Parameterized queries** — the primary defense; parser commits to grammar before data is bound
+- **Salted, iterated password hashing** (bcrypt / argon2) — bounds damage when hashes are stolen; the lab cracks plain SHA-256 via dictionary attack to motivate this
+- **Principle of least privilege** — a read-only DB user cannot `DROP TABLE` even after a successful injection
+- **Credential hygiene** — `.env` files with `.gitignore`, environment variables in deployment, secret managers for production
+- **Monitoring and auditing** — detects the raw query that someone adds in a later PR and slips past review
 
 ---
 
@@ -119,7 +131,7 @@ The L22 lab installs PostgreSQL locally inside the Colab runtime to demonstrate 
 
 ### Datasets
 - **L21 Lab:** Explores all five Redis data structures (Strings, Hashes, Lists, Sets, Sorted Sets) and builds a Cache-Aside caching pattern with a simulated database
-- **L22 Lab:** Sets up a vulnerable user authentication database, demonstrates SQL injection attacks, then fixes vulnerabilities with parameterized queries
+- **L22 Lab:** Sets up a two-table scenario — a public `products` table (the storefront search) and a private `users` table with SHA-256 password hashes. The attacker reaches `users` through the `products` search, then a dictionary attack cracks the stolen hashes. The lab then rebuilds both with parameterized queries and demonstrates how salted bcrypt would have bounded the damage.
 
 ---
 

