@@ -45,7 +45,9 @@ echo "PostgreSQL started"
 ```python
 # Setup: Install Python packages
 !pip install -q psycopg2-binary python-dotenv bcrypt
+```
 
+```python
 import psycopg2
 import hashlib
 import os
@@ -947,10 +949,10 @@ for row in cur.fetchall():
 ## 9. Cleanup
 
 ```python
-cursor.execute("DROP TABLE IF EXISTS products")
-cursor.execute("DROP TABLE IF EXISTS users")
-cursor.close()
-conn.close()
+# cursor.execute("DROP TABLE IF EXISTS products")
+# cursor.execute("DROP TABLE IF EXISTS users")
+# cursor.close()
+# conn.close()
 
 for f in [".env"]:
     if os.path.exists(f):
