@@ -509,7 +509,26 @@ The honest framing: **a DAL is an investment that pays off when change happens**
 
 ---
 
-## 11. Further Reading
+## 11. Glossary
+
+| Term | Stands For | Definition |
+| :--- | :--- | :--- |
+| **BSON** | Binary JSON | MongoDB's binary-encoded serialization format for documents, used over its wire protocol |
+| **CLI** | Command-Line Interface | A text-based interface for interacting with software via a terminal |
+| **DAL** | Data Access Layer | The architectural layer responsible for all database interactions — connection management, query execution, and data mapping |
+| **DAO** | Data Access Object | A design pattern for wrapping database operations for a single entity (e.g., `StudentDAO`) into a dedicated class |
+| **DSN** | Data Source Name | A connection string that encodes everything a driver needs to connect: driver, host, port, credentials, and database name |
+| **ETL** | Extract, Transform, Load | A data pipeline pattern that reads data from a source, reshapes it, and writes it to a destination |
+| **ORM** | Object-Relational Mapper | A library (e.g., SQLAlchemy) that maps database rows to Python objects, allowing queries to be expressed in Python rather than raw SQL |
+| **RESP** | Redis Serialization Protocol | The text-based wire protocol Redis uses to communicate between clients and server |
+| **SoC** | Separation of Concerns | The design principle that each module should address exactly one responsibility |
+| **TCP** | Transmission Control Protocol | The network protocol underlying most database connections; establishing a TCP session is part of the connection-open cost |
+| **TLS** | Transport Layer Security | The encryption layer added over TCP in production connections to protect credentials and data in transit |
+| **URI** | Uniform Resource Identifier | A string that uniquely identifies a resource; database connection strings follow URI syntax |
+
+---
+
+## 12. Further Reading
 
 ### Documentation
 *   [SQLAlchemy: Engine Configuration](https://docs.sqlalchemy.org/en/20/core/engines.html) — Official guide to creating engines, connection strings, and pool configuration
