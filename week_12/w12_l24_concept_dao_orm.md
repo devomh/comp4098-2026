@@ -31,7 +31,16 @@ In L23 you built a Data Access Layer — a class that centralizes database queri
 *   **No object model:** Your application thinks in terms of Python objects (students, courses), but the DAL returns raw dicts
 *   **Schema changes ripple:** If a column is renamed, you must find and update every SQL string that references it
 
-Industry has developed patterns to address these problems at different levels of abstraction.
+Industry has developed patterns to address these problems at different levels of abstraction. All of them are ways to implement a DAL — they differ in how much they abstract away from raw SQL:
+
+| Strategy | Abstraction Level | Best For |
+| :--- | :--- | :--- |
+| Raw SQL class (L23 DAL) | Lowest | Scripts, learning |
+| DAO | Per-table | Straightforward CRUD apps |
+| Repository | Per-domain concept | Business logic-heavy apps |
+| ORM | Automatic mapping | Productivity-first, web backends |
+
+This lesson covers the last three. The rest of §2–6 dives into each one.
 
 > **Analogy:** Think of ordering food at different types of restaurants:
 > *   **Raw SQL** is like going to a food market and cooking yourself — maximum control, maximum effort
@@ -189,6 +198,29 @@ class StudentRepository:
             )
 ```
 
+<details>
+<summary>What is <code>@dataclass</code>?</summary>
+
+`@dataclass` is a standard-library decorator (Python 3.7+) that auto-generates boilerplate methods for classes whose primary purpose is holding data. Given the field annotations, it generates:
+
+*   `__init__` — so you can write `Student(id=1, name="Ana", ...)` without coding the constructor
+*   `__repr__` — readable string representation for debugging
+*   `__eq__` — equality comparison by field values
+
+Without it, the equivalent class would require writing all of that by hand:
+
+```python
+class Student:
+    def __init__(self, id, name, major, gpa, courses):
+        self.id = id
+        self.name = name
+        ...
+```
+
+It's not SQLAlchemy-specific — it's a standard Python feature. It's particularly natural for Repository domain objects because those classes are just structured data containers with no logic. The decorator signals that intent clearly.
+
+</details>
+
 The Repository returns a rich **domain object** — a `Student` with their courses already attached. The application code doesn't need to know that this data comes from two different tables.
 
 ### Key Takeaway
@@ -284,8 +316,8 @@ SQLAlchemy is not just an ORM — it's a comprehensive database toolkit with two
 ```mermaid
 graph TD
     subgraph "SQLAlchemy"
-        ORM["ORM Layer<br/>(Classes, Sessions, Relationships)"]
-        CORE["Core Layer<br/>(Engine, Connection, SQL Expression Language)"]
+        ORM["ORM Layer<br/>(Classes, Sessions,<br/> Relationships)"]
+        CORE["Core Layer<br/>(Engine, Connection,<br/> SQL Expression Language)"]
     end
 
     subgraph "Database Drivers"
@@ -361,7 +393,7 @@ Here's the same task — "get all Data Science students sorted by GPA" — imple
 
 ### Raw SQL (psycopg2)
 ```python
-conn = psycopg2.connect(dsn)
+conn = psycopg2.connect(dsn)  # dsn = Data Source Name, e.g. "postgresql://user:pass@host/db"
 cur = conn.cursor()
 cur.execute("SELECT * FROM students WHERE major = %s ORDER BY gpa DESC", ("Data Science",))
 rows = cur.fetchall()
@@ -373,7 +405,7 @@ conn.close()
 
 ### SQLAlchemy Core
 ```python
-engine = create_engine(dsn)
+engine = create_engine(dsn)  # same DSN string as above
 with engine.connect() as conn:
     result = conn.execute(
         text("SELECT * FROM students WHERE major = :m ORDER BY gpa DESC"),
