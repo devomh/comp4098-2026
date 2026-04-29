@@ -9,8 +9,6 @@ duration: "50 mins"
 
 # Lab: Embeddings & Vector Search with ChromaDB
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_13/w13_l25_lab_vector_search.ipynb)
-
 ## Prerequisites & What You'll Build
 
 **Before starting:**
@@ -37,7 +35,9 @@ The setup cell installs Chroma and `sentence-transformers`, loads the embedding 
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q chromadb sentence-transformers
+```
 
+```python
 import numpy as np
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -165,10 +165,13 @@ Hand-computing cosine works for 3 strings. It does not scale to 3,000. Chroma ha
 ### 3.1 Create an In-Memory Client
 
 ```python
-client = chromadb.Client()  # in-memory; resets each run
+client = chromadb.EphemeralClient()  # in-memory; resets each run
 
 # Throwaway collection for the toy corpus — do NOT reuse this name in §5.
-toy_collection = client.get_or_create_collection(name="toy")
+toy_collection = client.get_or_create_collection(
+    name="toy",
+    metadata={"hnsw:space": "cosine"},
+)
 print(f"Collection created: {toy_collection.name}")
 ```
 
@@ -253,14 +256,14 @@ for rank, (doc, dist) in enumerate(zip(results["documents"][0], results["distanc
 <summary>Expected Output</summary>
 
 ~~~text
-  1. [0.41]  Locked out after too many failed attempts
-  2. [0.48]  I can't log in to my account
-  3. [0.52]  Login button does nothing when clicked
-  4. [0.55]  Two-factor authentication is not working
-  5. [0.58]  Cannot access my account on mobile
+  1. [0.08]  Locked out after too many failed attempts
+  2. [0.12]  I can't log in to my account
+  3. [0.14]  Login button does nothing when clicked
+  4. [0.15]  Two-factor authentication is not working
+  5. [0.17]  Cannot access my account on mobile
 ~~~
 
-(Distances will vary slightly; **all five top results come from the billing/auth group** (indices 0–9). Remember: Chroma returns *distance*, so smaller is better. Similarity = 1 − distance.)
+(Distances will vary slightly; **all five top results come from the billing/auth group** (indices 0–9). Remember: Chroma returns *cosine distance*, so smaller is better. Similarity = 1 − distance.)
 
 </details>
 
@@ -304,7 +307,10 @@ Semantic search is useful. Semantic search **plus structured filters** is what m
 ```python
 # Delete the old collection and start fresh
 client.delete_collection(name="toy")
-toy_collection = client.create_collection(name="toy")
+toy_collection = client.create_collection(
+    name="toy",
+    metadata={"hnsw:space": "cosine"},
+)
 
 categories = (["billing"] * 10) + (["shipping"] * 10) + (["refunds"] * 10)
 metadatas = [{"category": cat} for cat in categories]
@@ -342,11 +348,11 @@ for doc, meta, dist in zip(unfiltered["documents"][0], unfiltered["metadatas"][0
 
 ~~~text
 Query: 'help me with my order' (no filter)
-  [0.58] (shipping)  My order has not been delivered yet
-  [0.62] (shipping)  I need to cancel my order before it ships   (← may show 'refunds' on your run)
-  [0.65] (refunds)   I need to cancel my order before it ships
-  [0.68] (shipping)  Can I expedite shipping on an existing order?
-  [0.71] (refunds)   How do I return an item for a refund?
+  [0.17] (shipping)  My order has not been delivered yet
+  [0.19] (shipping)  I received the wrong item in my order
+  [0.21] (refunds)   I need to cancel my order before it ships
+  [0.23] (shipping)  Can I expedite shipping on an existing order?
+  [0.25] (refunds)   How do I return an item for a refund?
 ~~~
 
 (Results span **shipping and refunds** because "order" is an ambiguous signal. Exact ordering varies.)
@@ -371,11 +377,11 @@ for doc, meta, dist in zip(filtered["documents"][0], filtered["metadatas"][0], f
 
 ~~~text
 Query: 'help me with my order'  where category = 'shipping'
-  [0.58] (shipping)  My order has not been delivered yet
-  [0.68] (shipping)  Can I expedite shipping on an existing order?
-  [0.69] (shipping)  Where is my package?
-  [0.71] (shipping)  Shipping is taking longer than promised
-  [0.74] (shipping)  My order has not been delivered yet  (may vary)
+  [0.17] (shipping)  My order has not been delivered yet
+  [0.23] (shipping)  Can I expedite shipping on an existing order?
+  [0.24] (shipping)  Where is my package?
+  [0.25] (shipping)  Shipping is taking longer than promised
+  [0.27] (shipping)  I received the wrong item in my order
 ~~~
 
 (All 5 results are in the `shipping` category; the semantic ranking within that category is preserved.)
@@ -523,7 +529,10 @@ if os.path.exists("./chroma_db"):
     shutil.rmtree("./chroma_db")
 
 persistent_client = chromadb.PersistentClient(path="./chroma_db")
-collection = persistent_client.get_or_create_collection(name="course_concepts")
+collection = persistent_client.get_or_create_collection(
+    name="course_concepts",
+    metadata={"hnsw:space": "cosine"},
+)
 
 docs, ids, metas = [], [], []
 for filename in sorted(os.listdir("./corpus")):
@@ -590,19 +599,19 @@ for q in queries:
 
 ~~~text
 Query: What is the CAP theorem?
-  [0.72] w09 L17 (mod 3)  w09_l17_concept_nosql_document_model.md
-  [0.98] w08 L15 (mod 2)  w08_l15_concept_data_at_scale.md
-  [1.04] w11 L21 (mod 3)  w11_l21_concept_redis_keyvalue.md
+  [0.26] w09 L17 (mod 3)  w09_l17_concept_nosql_document_model.md
+  [0.48] w08 L15 (mod 2)  w08_l15_concept_data_at_scale.md
+  [0.54] w11 L21 (mod 3)  w11_l21_concept_redis_keyvalue.md
 
 Query: How do window functions work?
-  [0.65] w07 L13 (mod 2)  w07_l13_concept_window_functions.md
-  [1.02] w07 L14 (mod 2)  w07_l14_concept_ctes_advanced.md
-  [1.08] w06 L12 (mod 2)  w06_l12_concept_aggregation_grouping.md
+  [0.21] w07 L13 (mod 2)  w07_l13_concept_window_functions.md
+  [0.52] w07 L14 (mod 2)  w07_l14_concept_ctes_advanced.md
+  [0.58] w06 L12 (mod 2)  w06_l12_concept_aggregation_grouping.md
 
 Query: How do I prevent SQL injection?
-  [0.68] w11 L22 (mod 3)  w11_l22_concept_data_security.md
-  [1.10] w04 L08 (mod 1)  w04_l08_concept_dml_querying.md
-  [1.15] w04 L07 (mod 1)  w04_l07_concept_ddl_schema.md
+  [0.23] w11 L22 (mod 3)  w11_l22_concept_data_security.md
+  [0.61] w04 L08 (mod 1)  w04_l08_concept_dml_querying.md
+  [0.66] w04 L07 (mod 1)  w04_l07_concept_ddl_schema.md
 ~~~
 
 (Exact distances will vary; the **top-1 result** for each query should be the concept file named in bold above.)
@@ -638,7 +647,7 @@ Expected top-1: `w03_l06_concept_denormalization.md`.
 
 ---
 
-## 6. Exercises (Optional Stretch)
+## 6. Exercises
 
 ### Exercise 1: Swap the Embedding Model
 
