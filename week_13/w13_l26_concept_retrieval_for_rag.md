@@ -180,6 +180,34 @@ A **cross-encoder** takes `(query, document)` as a single input and produces a s
 
 The standard two-stage pattern: retrieve top-50 with a bi-encoder, then re-rank those 50 with a cross-encoder to produce a final top-5. Models to look up: `cross-encoder/ms-marco-MiniLM-L-6-v2`.
 
+### Context Expansion and Dead-End Pruning
+
+Re-ranking settles which chunk is most relevant. But relevant is not the same as *complete*.
+
+Consider what a chunk is: a slice of a longer document, cut at an arbitrary boundary. The answer to a query might begin near the end of chunk `c_i` and finish at the start of `c_{i+1}`. The bi-encoder ranked `c_i` highly because the vocabulary matched — but half the answer is missing.
+
+**Context expansion** addresses this by treating retrieval as a two-part question: *which chunk is the best entry point*, and *how far around that chunk should we read?* Once the cross-encoder has identified a winning chunk, you test whether its immediate neighbors add signal. Score `(query, c_{i-1} + c_i)` and `(query, c_i + c_{i+1})`. If a neighbor improves the score, absorb it and repeat — the chunk grows until the score stops improving.
+
+The natural unit of expansion is a **sentence**, not a full adjacent chunk. Expanding sentence-by-sentence gives you a clean stopping criterion: the moment the next sentence fails to improve the score, you stop at that boundary. Absorbing a whole adjacent chunk at once is coarser — you take the good sentences and the irrelevant ones together, which dilutes the signal sent to the LLM.
+
+**Dead-end pruning** applies this expansion logic to all top-k candidates, not just the winner. Some candidates will have no neighbor that improves their cross-encoder score. These fall into one of two categories:
+
+*   **Self-contained** — the chunk is a definition, a formula, a table. The answer is fully present. Keep it.
+*   **Dead end** — the cross-encoder score is low and neither neighbor rescues it. The chunk matched on surface vocabulary without semantic depth. Discard it.
+
+The distinction matters because passing dead-end chunks to the LLM is not neutral — the LLM will attempt to use them and may fabricate a connection that isn't there.
+
+The full pipeline then looks like:
+
+```
+bi-encoder retrieval  →  cross-encoder re-rank  →  context expansion  →  dead-end pruning  →  LLM
+     (fast, approximate)     (slow, precise)          (sentence-level)      (score-gated)
+```
+
+Each stage is optional — you can stop after any one of them. But each stage moves the signal from *proxy* (cosine distance of independent embeddings) toward *judgment* (a model that has actually read both the query and the passage together). The tools — `sentence-transformers` ships cross-encoder models — are the same library you used in L25. What changes is the pipeline around them.
+
+Whether this pipeline is worth the added latency depends entirely on your gold set. Measure hit@k before and after each stage. Some corpora see a large jump from re-ranking alone; others need expansion to close the remaining gap. There is no universal answer — only measurement.
+
 ### Query Expansion and HyDE
 
 *"Authentication error"* and *"cannot log in"* are close in embedding space, but what about *"my mfa code isn't arriving"*? Sometimes the query is too short or too technical to retrieve well.

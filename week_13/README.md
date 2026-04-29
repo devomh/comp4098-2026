@@ -117,13 +117,6 @@ This is the evaluation the industry skips and later regrets. The L26 lab makes i
 - **Week 13:** Shifts to unstructured text. Embeddings + ChromaDB introduce a fifth engine to the polyglot stack and a paradigm that `SELECT ... WHERE` cannot express
 - **Key Connection:** The same mental model — engine per workload — extends from OLTP / OLAP / document / key-value to vector search. ChromaDB isn't a replacement; it's an addition for the text-similarity use case.
 
-### Week 13 → Week 14/15: Retrieval Is Ready; Generation Lands in the Final Project
-
-- **Week 13:** Retrieval fully covered in lab. `retrieve(query) → list[dict]` is the handoff artifact.
-- **Week 14:** Reserved for production-RAG topics and/or final-project workshop time (see syllabus for the current slot plan).
-- **Week 15 Final Project:** Wrap `retrieve` in an LLM call of your choice to produce `rag_answer(question) → str`. Backend is yours (Ollama, Groq, OpenAI, Claude API, HuggingFace Inference API).
-- **Key Connection:** Generation quality is capped by retrieval quality. The final project is a realistic integration task — not a prescribed backend — because real teams pick their LLM based on cost, privacy, latency, and quality trade-offs.
-
 ---
 
 ## Technical Notes
@@ -142,9 +135,6 @@ The persistent corpus is 21 concept files from weeks 1–11, cloned from the pub
 Module 5 labs deliberately stop at retrieval. Generation is:
 
 - **Covered conceptually** in L26 §3 (the RAG pipeline diagram shows boxes 6–7 as out of scope for the labs)
-- **Executed hands-on** in the W15 final project, where students choose their own LLM backend
-
-This avoids classroom infrastructure risk (no GPU dependency, no 2–4 GB model pulls, no hosted-API keys) and turns the final project into a realistic integration task.
 
 ### Datasets
 
