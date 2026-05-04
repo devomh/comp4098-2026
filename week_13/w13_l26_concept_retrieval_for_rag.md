@@ -13,7 +13,7 @@ duration: "35 mins"
 
 By the end of this lesson, you will be able to:
 
-*   Draw the full **Retrieval-Augmented Generation (RAG)** pipeline and identify which stages this course covers in lab vs. which stages are the final-project integration task.
+*   Draw the full **Retrieval-Augmented Generation (RAG)** pipeline and identify which stages this course covers in lab vs. which stages are left for independent exploration.
 *   Explain **why RAG exists** in terms of LLM knowledge cutoffs, hallucination, private data, and context-window limits.
 *   Compare **chunking strategies** — fixed-size, sentence, recursive character, semantic — and reason about when each is appropriate.
 *   Define the core **retrieval tuning knobs**: top-k, similarity threshold, and MMR (Maximal Marginal Relevance).
@@ -39,7 +39,7 @@ Every company of any size has this conversation within a month of a ChatGPT-styl
 
 Fine-tuning on private data is expensive, brittle, and updates-hostile. Stuffing the whole corpus into the prompt breaks past a few thousand tokens and gets worse (not better) at much larger context windows. The industry's converged answer is **RAG**: keep the corpus in a vector store, retrieve the relevant chunks at query time, paste them into the prompt alongside the question, let the model summarize with citations.
 
-This lesson builds the load-bearing half — retrieval. The other half (generation) is the W15 final project.
+This lesson builds the load-bearing half — retrieval. The other half (generation) is left for students to explore.
 
 ---
 
@@ -72,9 +72,24 @@ flowchart LR
     style G fill:#fff3e0
 ```
 
-**Read the colors.** Boxes 1–5 (green) are the scope of this course's labs — L25 covered load, embed, and store; L26 (today's lab) covers chunk and retrieve properly. Boxes 6–7 (orange) — prompt assembly and generation — are the **W15 final project**. You will pick an LLM backend (Ollama, Groq, OpenAI, Claude, HuggingFace Inference API — your choice), wrap the `retrieve(query)` function from today's lab, and ship `rag_answer(question) → str`.
+**Read the colors.** Boxes 1–5 (green) are the scope of this course's labs — L25 covered load, embed, and store; L26 (today's lab) covers chunk and retrieve properly. Boxes 6–7 (orange) — prompt assembly and generation — are left for independent exploration.
 
 Why stop at 5? Because **every shortcoming in generation is upstream of retrieval**. If the retrieval step hands the LLM the wrong chunks, no prompt engineering and no model upgrade can save the answer. Retrieval quality is load-bearing. Generation quality is capped by it.
+
+**The generation half — a sketch.** Steps 6–7 translate to this seven-line algorithm; step 6 is the generation half, left for you to explore:
+
+```
+algorithm rag_answer(question):
+    1. query_vector ← embed(question)
+    2. chunks       ← retrieve(query_vector, k=5, threshold=0.3)   # today's lab
+    3. if chunks = ∅ → return "No relevant information found."
+    4. context      ← join(chunk["text"] for each chunk, sep="---")
+    5. prompt       ← system_instruction + context + "Question: " + question
+    6. answer       ← llm(prompt)                                   # generation half
+    7. return answer
+```
+
+The LLM in step 6 can be anything — local (Ollama), API-based (Gemini, OpenAI, Claude), or open-weight via HuggingFace Inference API. The prompt in step 5 is where prompt engineering lives: instruct the model to answer *only* from the retrieved context, cite chunk indices, and admit ignorance when context is insufficient. Steps 1–5 are identical regardless of which LLM you choose, which is precisely why the retrieval contract (`retrieve(query) → list[dict]`) is designed as a clean handoff.
 
 ### 3.2 Why RAG Exists — Four Forcing Functions
 
@@ -127,9 +142,11 @@ A threshold of `similarity >= 0.3` (i.e., distance ≤ 0.7) is a reasonable firs
 
 Plain top-k returns the k nearest vectors. If three chunks of your corpus are near-duplicates, top-3 gives you three paraphrases of the same thing. **MMR** re-ranks with a penalty for redundancy:
 
-```
-MMR(c) = λ · sim(c, query) − (1 − λ) · max_{c' ∈ selected} sim(c, c')
-```
+$$
+\text{MMR}(c) = \lambda \cdot \text{sim}(c,\, q) - (1-\lambda) \cdot \max_{c' \in S}\, \text{sim}(c,\, c')
+$$
+
+where $q$ is the query vector and $S$ is the set of already-selected chunks.
 
 High λ (e.g., 0.9) ≈ pure relevance. Low λ (e.g., 0.3) ≈ pure diversity. A typical λ around 0.5 gives diverse but still-relevant results. Chroma supports this via the `n_results` + post-processing pattern; many wrapper libraries (LangChain, LlamaIndex) expose it as a parameter.
 
@@ -155,7 +172,7 @@ Now you have a number. Change the chunker, re-measure. Change the embedding mode
 Generation quality is *capped* by retrieval quality. Debug in this order:
 
 1.  **Retrieval fails.** The LLM cannot possibly answer correctly if the right chunk wasn't retrieved. Fix retrieval first. (Chunking, embedding model, k, threshold.)
-2.  **Retrieval succeeds, generation fails.** Now look at the prompt, the model, the temperature. This is the smaller problem, and it's the problem W15 tackles.
+2.  **Retrieval succeeds, generation fails.** Now look at the prompt, the model, the temperature. This is the smaller problem — and the one the sketch above outlines for further exploration.
 
 Reverse this order and you will spend weeks fiddling with prompt wording while your retriever silently hands the LLM irrelevant chunks. The industry stumbles here constantly.
 
@@ -238,7 +255,7 @@ Both techniques tend to add 2–5 points to hit@k on hard queries. They are also
 
 ### "Where does the LLM come in?"
 
-**Answer:** The **W15 final project**. The `retrieve(query) → list[dict]` function you finalize in today's lab is the contract. In W15 you'll choose an LLM backend — Ollama locally, Groq's free tier, OpenAI with your personal credit, the Claude API, or HuggingFace Inference API — and wrap `retrieve` into `rag_answer(question) → str`. The choice of backend is deliberately yours because real teams pick LLMs based on cost, privacy, latency, and quality trade-offs, and hard-coding one in a timed lab would hide that decision.
+**Answer:** At step 6 of the algorithm in section 3.1. The `retrieve(query) → list[dict]` function you build today is the handoff point. To complete the pipeline you would choose an LLM backend — Ollama locally, Gemini, OpenAI, the Claude API, or HuggingFace Inference API — and wrap `retrieve` into `rag_answer(question) → str`. Real teams pick LLMs based on cost, privacy, latency, and quality trade-offs; the retrieval contract stays the same regardless of which backend you choose.
 
 ---
 
@@ -246,13 +263,11 @@ Both techniques tend to add 2–5 points to hit@k on hard queries. They are also
 
 Key takeaways:
 
-*   **RAG** adds retrieval to generation: `retrieve → prompt → generate`. This lesson owns the retrieval side; W15 adds generation.
+*   **RAG** adds retrieval to generation: `retrieve → prompt → generate`. This lesson owns the retrieval side; generation is sketched in section 3.1 for further exploration.
 *   **Chunking** trades document coherence for retrieval precision. `RecursiveCharacterTextSplitter` with overlap is the production default.
 *   **Retrieval tuning** means setting top-k, applying a similarity threshold, and optionally using MMR to diversify.
 *   **Evaluate retrieval independently of the LLM** with hit@k over a hand-authored gold set. This is the single highest-leverage practice in production RAG.
 *   **Generation quality is capped by retrieval quality.** Fix retrieval first, always.
-
-*   **Preview of W15 final project:** The `retrieve(query)` function you finalize in today's lab — together with the `course_concepts` Chroma collection — is the handoff artifact. In W15 you will choose an LLM backend of your own and wrap `retrieve` into `rag_answer(question) → str`. The retrieval contract is everything; get it right today.
 
 ---
 

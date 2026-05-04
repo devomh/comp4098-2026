@@ -9,8 +9,6 @@ duration: "45 mins"
 
 # Lab: Retrieval Quality — Chunking, Tuning, Evaluation
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/devomh/comp4098-2026/blob/main/week_13/w13_l26_lab_retrieval_quality.ipynb)
-
 ## Prerequisites & What You'll Build
 
 **Before starting:**
@@ -22,7 +20,7 @@ duration: "45 mins"
 1.  Run a **chunking bake-off** — whole document vs. fixed-size vs. recursive splitter — on the longest concept file in the corpus.
 2.  Tune **top-k** and apply a **similarity threshold**; implement a `retrieve(query, k, min_similarity)` wrapper.
 3.  Author a 5-pair **gold set** and measure **hit@1 / hit@3 / hit@5**.
-4.  Finalize the `retrieve(query)` function that is the **handoff artifact** for the W15 final project.
+4.  Finalize the `retrieve(query)` function as a clean, reusable retrieval contract.
 
 ---
 
@@ -36,7 +34,9 @@ The setup cell must handle two cases:
 ```python
 # Setup: Run this cell first (required for Colab)
 !pip install -q chromadb sentence-transformers langchain-text-splitters
+```
 
+```python
 import os, re, shutil, subprocess
 import chromadb
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -179,6 +179,7 @@ fixed_500 = fixed_splitter.split_text(bakeoff_text)
 recursive_splitter = RecursiveCharacterTextSplitter(
     chunk_size=200,
     chunk_overlap=50,
+    # separators=["\n\n", "\n", " ", ""],  # default — tried in order; falls back to next if chunk still too large
 )
 recursive_200_50 = recursive_splitter.split_text(bakeoff_text)
 
@@ -338,9 +339,9 @@ for k in [1, 3, 5, 10]:
 
 </details>
 
-### 3.2 Observation — The Distance Cliff
+### 3.2 Observation — The Similarity Cliff
 
-Look at the distances as k grows. You should see a **cliff**: one or two hits at a clearly lower distance (say, ≤ 0.85), then a jump (often 0.2+) to a plateau of loosely related files. Above the cliff → relevant. Below the cliff → noise. This is why a similarity threshold matters: it lets you cut at the cliff automatically.
+Convert the distances mentally using `similarity = 1 - distance`. You should see a **cliff**: one or two hits at a clearly higher similarity (say, ≥ 0.3), then a drop (often 0.2+) to a plateau of loosely related files. Above the cliff → relevant. Below the cliff → noise. This is why a similarity threshold matters: it lets you cut at the cliff automatically, which is exactly what the `min_similarity` parameter in §3.3 does.
 
 ### 3.3 Your Turn — Build the `retrieve` Wrapper
 
@@ -514,9 +515,9 @@ Expected: all three score poorly (hit@3 of 0–20%) because four of the five gol
 
 ---
 
-## 5. Final-Project Handoff
+## 5. Finalizing the Retrieval Contract
 
-The `retrieve` function you built in §3 is the contract the W15 final project will consume. Finalize it here — docstring, signature, and the `course_concepts` collection path — and leave it in a known state.
+The `retrieve` function you built in §3 is the retrieval contract. Finalize it here — docstring, signature, and the `course_concepts` collection path — and leave it in a known state.
 
 ### 5.1 The Contract
 
@@ -574,9 +575,9 @@ for h in demo:
 
 </details>
 
-### 5.2 The Handoff Note
+### 5.2 Extending to Generation
 
-This function, plus the `course_concepts` collection at `./chroma_db`, is what you'll wrap with a generation call in the final project. The W15 deliverable is a function with this shape:
+This function, plus the `course_concepts` collection at `./chroma_db`, is the retrieval half of a full RAG pipeline. Adding the generation half looks like this:
 
 ```python
 def rag_answer(question: str) -> str:
@@ -585,11 +586,11 @@ def rag_answer(question: str) -> str:
         return "I don't have information to answer that from the course materials."
     context = "\n\n".join(h["document"] for h in hits)
     prompt = f"Context:\n{context}\n\nQuestion: {question}\nAnswer based only on the context above."
-    # TODO in W15: call your chosen LLM backend with `prompt`
+    # TODO: call your chosen LLM backend with `prompt`
     ...
 ```
 
-The LLM backend is your pick — Ollama, Groq, OpenAI, Claude, or HuggingFace Inference. The retrieval contract is fixed.
+The LLM backend is your pick — Ollama, Gemini, OpenAI, Claude, or HuggingFace Inference. The `retrieve` function stays the same regardless of which backend you choose.
 
 ---
 
@@ -601,4 +602,4 @@ In this lab you:
 *   Tuned **top-k** across k ∈ {1, 3, 5, 10} and observed the **distance cliff** that motivates a similarity threshold.
 *   Built a `retrieve(query, k, min_similarity)` wrapper that converts Chroma's cosine distance to similarity and filters below-threshold matches.
 *   Authored a 5-pair **gold set** and computed **hit@1 / hit@3 / hit@5** — the evaluation loop the industry skips and later regrets.
-*   Finalized the `retrieve` function that is the handoff to the **W15 final project**, where you'll plug in an LLM backend of your choice and wrap it as `rag_answer(question) → str`.
+*   Finalized the `retrieve` function as a clean retrieval contract — the foundation for any RAG pipeline you choose to build independently.
